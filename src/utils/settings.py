@@ -12,14 +12,16 @@ BLACK = (20, 20, 20)
 GREY = (159, 161, 164)
 DARK_GREY = (74, 74, 74)
 RED = (255, 0, 0)
+BAR_RED = (100, 0, 0)
 GREEN = (0, 255, 0)
+BAR_GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
 
 # Jugador base
 PLAYER_SIZE = 100
 
-# --- DATOS DE PERSONAJES ---
+# DATOS DE PERSONAJES
 CHARACTERS = {
     "caballero": {
         "speed": 4,
@@ -37,7 +39,7 @@ CHARACTERS = {
     }
 }
 
-# --- DATOS DE ARMAS ---
+# DATOS DE ARMAS
 WEAPONS = {
     "espada": {"cooldown": 60, "damage": 25, "speed": 1.5, "color": WHITE, "type": "melee"},
     "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"}

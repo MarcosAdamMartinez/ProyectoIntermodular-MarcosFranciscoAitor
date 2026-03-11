@@ -2,7 +2,7 @@ import pygame
 import os
 from src.entities.player import Player
 from src.entities.enemy import Enemy
-from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite
+from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE
 
 
 class CameraGroup(pygame.sprite.Group):
@@ -86,16 +86,49 @@ class GameSession:
 
         self.enemies.update()
 
-        # Colisiones Enemigo -> Jugador
-        if pygame.sprite.spritecollide(self.local_player, self.enemies, False):
+        # --- Colisiones Enemigo -> Jugador ---
+        # Añadimos collided=pygame.sprite.collide_rect_ratio(0.5)
+        # Esto reduce la hitbox de ambos a la mitad (50%) centrada.
+        if pygame.sprite.spritecollide(self.local_player, self.enemies, False, collided=pygame.sprite.collide_rect_ratio(0.5)):
             self.local_player.take_damage(1)
 
-        # Colisiones Proyectil -> Enemigo
-        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False)
+        # --- Colisiones Proyectil -> Enemigo ---
+        # Aquí también reducimos la hitbox a un 60% (0.6) para que el proyectil
+        # tenga que tocar "carne" de zombi y no solo el aire de alrededor.
+        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.4))
+
         for enemy, projs in hits.items():
             for proj in projs:
                 enemy.take_damage(proj.damage)
                 proj.kill()
 
     def draw(self, screen):
+        # La cámara dibuja el mapa y los sprites desplazados
         self.all_sprites.custom_draw(self.local_player)
+
+        # Dibuja la Interfaz de Usuario - Barra de vida
+        self.draw_ui(screen)
+
+    def draw_ui(self, screen):
+        # BARRA DE VIDA
+        bar_width = 200
+        bar_height = 20
+
+        x = 20
+        y = 20
+
+        # Prevenir que la vida baje de 0 para el cálculo matemático
+        current_hp = max(0, self.local_player.hp)
+
+        # Calcular qué porcentaje de la barra debe estar lleno
+        hp_ratio = current_hp / self.local_player.max_hp
+        fill_width = bar_width * hp_ratio
+
+        # Crear los rectángulos
+        bg_rect = pygame.Rect(x, y, bar_width, bar_height)
+        fill_rect = pygame.Rect(x, y, fill_width, bar_height)
+
+        # Dibujar en la pantalla (Fondo rojo oscuro, relleno verde, borde blanco)
+        pygame.draw.rect(screen, BAR_RED, bg_rect)  # Fondo Rojo
+        pygame.draw.rect(screen, BAR_GREEN, fill_rect)  # Relleno Verde
+        pygame.draw.rect(screen, WHITE, bg_rect, 2)  # Borde

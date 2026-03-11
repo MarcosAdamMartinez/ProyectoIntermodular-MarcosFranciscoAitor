@@ -8,7 +8,7 @@ class Engine:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Python Survivors")
+        pygame.display.set_caption("Python Survivors - DEMO")
         self.clock = pygame.time.Clock()
         self.state = "MENU"
 
@@ -22,15 +22,15 @@ class Engine:
                 self.game_over_loop()
 
     def menu_loop(self):
-        self.screen.fill(BLACK)
-        font = pygame.font.SysFont("Arial", 40)
-        title = font.render("Selecciona tu Personaje", True, WHITE)
-        txt_knight = font.render("1. Caballero (Alta vida, Espada)", True, BLUE)
-        txt_mage = font.render("2. Mago (Rápido, Varita Mágica)", True, (150, 0, 255))
+        self.screen.fill(DARK_GREY)
+        font = pygame.font.SysFont("Arial", 40 ,bold=True)
+        title = font.render("SELECCIONA TU PERSONAJE", True, WHITE)
+        txt_knight = font.render("1 - Caballero SKILL: Mucha vida - ARMA: Espada", True, BLUE)
+        txt_mage = font.render("2 - Mago SKILL: Rápido - ARMA: Varita Mágica", True, GREEN)
 
-        self.screen.blit(title, (WIDTH // 2 - 200, HEIGHT // 2 - 100))
-        self.screen.blit(txt_knight, (WIDTH // 2 - 200, HEIGHT // 2))
-        self.screen.blit(txt_mage, (WIDTH // 2 - 200, HEIGHT // 2 + 50))
+        self.screen.blit(title, (WIDTH // 2 - 300, HEIGHT // 2 - 100))
+        self.screen.blit(txt_knight, (WIDTH // 2 - 450, HEIGHT // 2 + 20))
+        self.screen.blit(txt_mage, (WIDTH // 2 - 450, HEIGHT // 2 + 80))
 
         pygame.display.flip()
 
@@ -71,7 +71,7 @@ class Engine:
         title = font_titulo.render("GAME OVER", True, RED)
         txt_replay = font_texto.render("Pulse ESPACIO para volver a elegir personaje", True, RED)
 
-        self.screen.blit(title, (WIDTH // 2 - 100, HEIGHT // 2 - 100))
+        self.screen.blit(title, (WIDTH // 2 - 150, HEIGHT // 2 - 100))
         self.screen.blit(txt_replay, (WIDTH // 2 - 400, HEIGHT // 2))
 
         pygame.display.flip()

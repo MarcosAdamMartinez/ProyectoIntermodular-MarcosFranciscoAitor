@@ -68,9 +68,13 @@ class GameSession:
         self.spawn_timer = 0
 
     def update(self):
+        if self.local_player.hp <= 0:
+            return False
         self.local_player.update(self.enemies)
         self.update_singleplayer()
         self.projectiles.update()
+
+        return True
 
     def update_singleplayer(self):
         self.spawn_timer += 1

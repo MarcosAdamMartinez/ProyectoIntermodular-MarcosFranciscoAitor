@@ -18,6 +18,8 @@ class Engine:
                 self.menu_loop()
             elif self.state == "PLAYING":
                 self.game_loop()
+            elif self.state == "GAME_OVER":
+                self.game_over_loop()
 
     def menu_loop(self):
         self.screen.fill(BLACK)
@@ -50,8 +52,34 @@ class Engine:
                 pygame.quit()
                 sys.exit()
 
-        self.game.update()
+        juego_activo = self.game.update()
+
+        if not juego_activo:
+            self.state = "GAME_OVER"
+            return
+
         self.game.draw(self.screen)
 
         pygame.display.flip()
         self.clock.tick(FPS)
+
+    def game_over_loop(self):
+        self.screen.fill(GREY)
+        font_titulo = pygame.font.SysFont("Arial", 50)
+        font_texto = pygame.font.SysFont("Arial", 40)
+
+        title = font_titulo.render("GAME OVER", True, RED)
+        txt_replay = font_texto.render("Pulse ESPACIO para volver a elegir personaje", True, RED)
+
+        self.screen.blit(title, (WIDTH // 2 - 100, HEIGHT // 2 - 100))
+        self.screen.blit(txt_replay, (WIDTH // 2 - 400, HEIGHT // 2))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    self.state = "MENU"

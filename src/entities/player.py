@@ -1,6 +1,7 @@
 import pygame
 from src.utils.settings import *
 from src.entities.weapon import Weapon
+import src.core.engine as engine
 
 
 class Player(pygame.sprite.Sprite):

@@ -5,7 +5,7 @@ from src.utils.settings import load_sprite
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, pos, direction, stats):
         super().__init__()
-        self.image = load_sprite(f"assets/sprites/{stats['type']}.png", (40, 40), stats["color"])
+        self.image = load_sprite(f"assets/sprites/{stats['type']}.png", (60, 60), stats["color"])
 
         # Rotar la imagen hacia la dirección en la que viaja
         angle = direction.angle_to(pygame.math.Vector2(1, 0))

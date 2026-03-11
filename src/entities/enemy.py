@@ -6,10 +6,10 @@ from src.utils.settings import *
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, target):
         super().__init__()
-        self.image = load_sprite("assets/sprites/zombie.png", (70, 75), RED)
+        self.image = load_sprite("assets/sprites/zombie.png", (100, 90), RED)
 
         # Aparecer fuera de la pantalla en un radio alrededor del jugador
-        spawn_radius = 800
+        spawn_radius = 400
         angle = random.uniform(0, 360)
         offset = pygame.math.Vector2(spawn_radius, 0).rotate(angle)
         spawn_pos = target.pos + offset

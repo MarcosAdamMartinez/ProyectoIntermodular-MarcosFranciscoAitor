@@ -9,7 +9,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         stats = CHARACTERS[character_name]
 
-        self.image = load_sprite(stats["sprite"], (PLAYER_SIZE, PLAYER_SIZE + 10), stats["color"])
+        self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 30, PLAYER_SIZE), stats["color"])
         self.rect = self.image.get_rect(center=(x, y))
         self.pos = pygame.math.Vector2(x, y)
 

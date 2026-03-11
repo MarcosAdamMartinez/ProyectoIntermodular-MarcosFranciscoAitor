@@ -15,6 +15,7 @@ RED = (255, 0, 0)
 BAR_RED = (100, 0, 0)
 GREEN = (0, 255, 0)
 BAR_GREEN = (0, 255, 0)
+BORDER_GREEN = (20, 80, 20)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
 

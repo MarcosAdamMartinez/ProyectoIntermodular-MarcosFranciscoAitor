@@ -46,4 +46,3 @@ class Player(pygame.sprite.Sprite):
         self.hp -= amount
         if self.hp <= 0:
             print("¡Has muerto!")
-            # Aquí se puede añadir lógica de Game Over más adelante

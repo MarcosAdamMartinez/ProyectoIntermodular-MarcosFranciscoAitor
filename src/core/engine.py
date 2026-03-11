@@ -87,7 +87,7 @@ class Engine:
 
     def game_over_loop(self):
         # Cambiamos el color del fondo y creamos las fuentes que vamos a usar en los textos
-        self.screen.fill(GREY)
+        self.screen.fill(DARK_GREY)
 
         font_titulo = pygame.font.SysFont("Arial", 50)
         font_texto = pygame.font.SysFont("Arial", 40)
@@ -114,5 +114,5 @@ class Engine:
             if event.type == pygame.KEYDOWN:
                 # Si la tecla es el espacio:
                 if event.key == pygame.K_SPACE:
-                    #Cambia el estado a MENU
+                    # Cambia el estado a MENU
                     self.state = "MENU"

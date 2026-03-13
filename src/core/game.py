@@ -57,19 +57,28 @@ class CameraGroup(pygame.sprite.Group):
 
 class GameSession:
     def __init__(self, character_name="caballero", multiplayer=False):
+        # Variable para el multijugador
         self.multiplayer = multiplayer
+
+        # Variable encargada de almacenar todos los sprites
         self.all_sprites = CameraGroup()
+        # Variable encargada de almacenar todos los enemigos
         self.enemies = pygame.sprite.Group()
+        # Variable encargada de almacenar todos los proyectiles
         self.projectiles = pygame.sprite.Group()
 
         # Jugador Local
         self.local_player = Player(WIDTH // 2, HEIGHT // 2, character_name, self.all_sprites, self.projectiles)
         self.all_sprites.add(self.local_player)
 
+        # Variables para el spawn de los enemigos
         self.spawn_timer = 0
+        self.spawn_rate = 60
 
     def update(self):
+        # Comprobar si el jugador esta muerto
         if self.local_player.hp <= 0:
+            # Si lo esta devuelve False
             return False
         self.local_player.update(self.enemies)
         self.update_singleplayer()
@@ -78,29 +87,42 @@ class GameSession:
         return True
 
     def update_singleplayer(self):
+        # Sumamos 1 por cada tick para llegar al spawn_rate
         self.spawn_timer += 1
-        if self.spawn_timer >= 60:  # 1 enemigo por segundo
+
+        # Si el spawn_timer es igual l spawn_rate spawnea un enemigo
+        if self.spawn_timer >= self.spawn_rate:
+
+            # Crea el enemigo
             new_enemy = Enemy(target=self.local_player)
             self.enemies.add(new_enemy)
-            self.all_sprites.add(new_enemy)
+            (self.all_sprites.add(new_enemy))
+
+            # Resetea el spawn_timer
             self.spawn_timer = 0
+
+            # Disminuye el spawn_rate progresivamente para mas dificultad
+            if self.spawn_rate > 20:
+                self.spawn_rate -= 0.5
 
         self.enemies.update()
 
         # Colisiones Enemigo -> Jugador
-        # Añadimos collided=pygame.sprite.collide_rect_ratio(0.5)
-        # Esto reduce la hitbox de ambos a la mitad (50%) centrada.
+        # Añadimos collided = pygame.sprite.collide_rect_ratio(0.5) para reducir la hitbox de ambos a la mitad centrada
         if pygame.sprite.spritecollide(self.local_player, self.enemies, False, collided=pygame.sprite.collide_rect_ratio(0.5)):
             self.local_player.take_damage(1)
 
         # Colisiones Proyectil -> Enemigo
-        # Aquí también reducimos la hitbox a un 60% (0.6) para que el proyectil
-        # tenga que tocar "carne" de zombi y no solo el aire de alrededor.
+        # Aqui tambien reducimos la hitbox a un 0.6 para que se vea mejor como golpea el proyectil al zombie
         hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.4))
 
+        # Leemos si el zombie ha sido golpeado
         for enemy, projs in hits.items():
             for proj in projs:
+                # Hacemos daño al zombie
                 enemy.take_damage(proj.damage)
+
+                # Quitamos el proyectil
                 proj.kill()
 
     def draw(self, screen):

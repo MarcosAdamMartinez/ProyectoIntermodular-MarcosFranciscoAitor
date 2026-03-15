@@ -46,9 +46,8 @@ class Enemy(pygame.sprite.Sprite):
             self.rect.center = self.pos
 
     def take_damage(self, amount):
-        # Reducimos la salud actual del enemigo restandole el dano del ataque que le pasamos por parametro
         self.hp -= amount
-
-        # Comprobamos si la vida total ha caido a cero o menos y de ser asi lo destruimos de todos nuestros grupos de dibujo
         if self.hp <= 0:
             self.kill()
+            return True # Avisamos de que el enemigo acaba de morir
+        return False

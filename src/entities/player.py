@@ -32,6 +32,14 @@ class Player(pygame.sprite.Sprite):
         # Le entregamos a nuestro jugador su arma inicial basandonos en las estadisticas cargadas
         self.add_weapon(stats["starting_weapon"])
 
+        # Inicializamos las estadisticas de progreso del jugador
+        self.xp = 0
+        self.level = 1
+        self.xp_to_next_level = 50
+        self.magnet_radius = 50  # Distancia a la que las gemas empiezan a volar hacia nosotros
+
+        self.pending_level_ups = 0
+
     def add_weapon(self, weapon_name):
         # Creamos una funcion para poder equipar nuevas armas al inventario de nuestro personaje durante la partida
         self.weapons.append(Weapon(weapon_name, self))
@@ -66,3 +74,34 @@ class Player(pygame.sprite.Sprite):
         # Comprobamos si nuestra salud ha llegado a cero y de ser asi imprimimos un mensaje confirmando que hemos caido
         if self.hp <= 0:
             print("¡Has muerto!")
+
+    def gain_xp(self, amount):
+        # Sumamos la experiencia recogida y comprobamos si hemos alcanzado el limite para subir
+        self.xp += amount
+        if self.xp >= self.xp_to_next_level:
+            self.level_up()
+
+    def level_up(self):
+        # Restamos la experiencia requerida por si recogimos de mas y subimos el nivel
+        self.xp -= self.xp_to_next_level
+        self.level += 1
+
+        # Aumentamos la cantidad necesaria para el proximo nivel multiplicandola
+        self.xp_to_next_level = int(self.xp_to_next_level * 1.1)
+
+        self.pending_level_ups += 1
+
+    def apply_upgrade(self, upgrade):
+        if upgrade["type"] == "max_hp":
+            self.max_hp += upgrade["value"]
+            self.hp += upgrade["value"]
+        elif upgrade["type"] == "speed":
+            self.speed += upgrade["value"]
+        elif upgrade["type"] == "damage":
+            for weapon in self.weapons:
+                weapon.stats["damage"] += upgrade["value"]
+        elif upgrade["type"] == "cooldown":
+            for weapon in self.weapons:
+                weapon.stats["cooldown"] = max(10, int(weapon.stats["cooldown"] * upgrade["value"]))
+        elif upgrade["type"] == "magnet":
+            self.magnet_radius += upgrade["value"]

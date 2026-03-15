@@ -11,7 +11,7 @@ class Weapon:
         self.owner = owner
 
         # Buscamos las estadisticas especificas de este armamento en nuestro diccionario global de configuracion
-        self.stats = WEAPONS[name]
+        self.stats = WEAPONS[name].copy()
 
         # Inicializamos un temporizador a cero para controlar el tiempo exacto que debemos esperar entre cada ataque
         self.cooldown_timer = 0

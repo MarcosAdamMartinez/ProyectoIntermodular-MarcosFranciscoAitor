@@ -1,3 +1,4 @@
+import random
 import sys
 from src.utils.settings import *
 from src.core.game import GameSession
@@ -10,6 +11,7 @@ class Engine:
         pygame.display.set_caption("Python Survivors - DEMO")
         self.clock = pygame.time.Clock()
         self.state = "MENU_PRINCIPAL"
+        self.current_choices = []
 
     def run(self):
         while True:
@@ -23,6 +25,8 @@ class Engine:
                 self.game_loop()
             elif self.state == "GAME_OVER":
                 self.game_over_loop()
+            elif self.state == "LEVEL_UP":
+                self.level_up_loop()
 
     def menu_principal_loop(self):
         self.screen.fill(DARK_GREY)
@@ -231,7 +235,6 @@ class Engine:
                     if btn_volver.collidepoint(mouse_pos):
                         self.state = "MENU_PRINCIPAL"
 
-
     def game_loop(self):
         # Si cerramos la ventana se termina la ejecucion
         for event in pygame.event.get():
@@ -239,13 +242,14 @@ class Engine:
                 pygame.quit()
                 sys.exit()
 
-        # Obtenemos el estado del juego (True o False)
-        juego_activo = self.game.update()
+        estado_juego = self.game.update()
 
-        # Si es False, pasamos al estado de GAME_OVER
-        if not juego_activo:
+        if estado_juego == "GAME_OVER":
             self.state = "GAME_OVER"
             return
+        elif estado_juego == "LEVEL_UP":
+            self.state = "LEVEL_UP"
+            self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
 
         # Dibujamos el nuevo estado con los movimientos en pantalla
         self.game.draw(self.screen)
@@ -286,3 +290,54 @@ class Engine:
                 if event.key == pygame.K_SPACE:
                     # Cambia el estado a MENU
                     self.state = "MENU_PRINCIPAL"
+
+    def level_up_loop(self):
+        self.game.draw(self.screen)
+
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        font_title = pygame.font.SysFont("Arial", 20, bold=True)
+        font_desc = pygame.font.SysFont("Arial", 15)
+
+        title = font_title.render("SUBIDA DE NIVEL!", True, (255, 215, 0))
+        self.screen.blit(title, title.get_rect(center=(WIDTH // 2, 100)))
+
+        mouse_pos = pygame.mouse.get_pos()
+        clicked = False
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                clicked = True
+
+        btn_width = 450
+        btn_height = 70
+        spacing = 30
+        start_y = 200
+
+        for i, upgrade in enumerate(self.current_choices):
+            btn_rect = pygame.Rect(WIDTH // 2 - btn_width // 2, start_y + i * (btn_height + spacing), btn_width, btn_height)
+
+            color = (70, 70, 70)
+            if btn_rect.collidepoint(mouse_pos):
+                color = (100, 100, 100)
+
+                if clicked:
+                    self.game.local_player.apply_upgrade(upgrade)
+                    self.state = "PLAYING"
+                    return
+
+            pygame.draw.rect(self.screen, color, btn_rect, border_radius=10)
+            pygame.draw.rect(self.screen, (155, 215, 0), btn_rect, 2, border_radius=10)
+
+            name_txt = font_title.render(upgrade["name"], True, (255, 255, 255))
+            desc_txt = font_desc.render(upgrade["desc"], True, (200, 200, 200))
+
+            self.screen.blit(name_txt, (btn_rect.x + 20, btn_rect.y + 15))
+            self.screen.blit(desc_txt, (btn_rect.x + 20, btn_rect.y + name_txt.get_height() + 15))
+
+        pygame.display.flip()

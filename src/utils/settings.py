@@ -18,6 +18,7 @@ BAR_GREEN = (0, 255, 0)
 BORDER_GREEN = (20, 80, 20)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
+LIGHT_YELLOW = (255, 255, 100)
 
 # Jugador base
 PLAYER_SIZE = 100
@@ -37,13 +38,21 @@ CHARACTERS = {
         "color": (150, 0, 255),
         "sprite": "assets/sprites/mage.png",
         "starting_weapon": "varita"
+    },
+    "my_uncle": {
+        "speed": 5,
+        "hp": 100,
+        "color": GREY,
+        "sprite": "assets/sprites/my_uncle.png",
+        "starting_weapon": "banana"
     }
 }
 
 # DATOS DE ARMAS
 WEAPONS = {
     "espada": {"cooldown": 60, "damage": 25, "speed": 1.5, "color": WHITE, "type": "melee"},
-    "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"}
+    "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"},
+    "banana": {"cooldown": 30, "damage": 10, "speed": 7, "color": YELLOW, "type": "banana", "boomerang": True}
 }
 
 # DATOS DE MEJORAS

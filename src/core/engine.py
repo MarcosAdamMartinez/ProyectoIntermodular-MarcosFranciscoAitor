@@ -1,5 +1,8 @@
 import random
 import sys
+
+import pygame
+
 from src.utils.settings import *
 from src.core.game import GameSession
 
@@ -8,7 +11,7 @@ class Engine:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Python Survivors - DEMO")
+        pygame.display.set_caption("Python Survivors - Pre-Alpha")
         self.clock = pygame.time.Clock()
         self.state = "MENU_PRINCIPAL"
         self.current_choices = []
@@ -109,10 +112,11 @@ class Engine:
         self.screen.blit(title, title_rect)
 
         # Definimos las dimensiones y posicion de los botones
-        btn_width = 450
+        btn_width = 500
         btn_height = 70
         btn_knight = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 - 40, btn_width, btn_height)
         btn_mage = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 60, btn_width, btn_height)
+        btn_my_uncle = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 160, btn_width, btn_height)
 
         # Obtenemos la posicion actual del raton
         mouse_pos = pygame.mouse.get_pos()
@@ -151,6 +155,23 @@ class Engine:
         self.screen.blit(txt_mage,
                          (btn_mage.centerx - txt_mage.get_width() // 2, btn_mage.centery - txt_mage.get_height() // 2))
 
+        # Dibujamos el boton de mi tio
+        # Si el raton toca el boton, usamos un morado mas claro, si no el normal
+        color_unc = (LIGHT_YELLOW) if btn_my_uncle.collidepoint(mouse_pos) else YELLOW
+
+        # Borde redondeado
+        pygame.draw.rect(self.screen, color_unc, btn_my_uncle, border_radius=15)
+
+        # Borde blanco
+        pygame.draw.rect(self.screen, WHITE, btn_my_uncle, 3, border_radius=15)
+
+        # Creamos el texto para el boton de mi tio
+        txt_my_uncle = font.render("Mi Tio (El Mas Primitivo)", True, BLACK)
+
+        # Lo representamos en la "screen"
+        self.screen.blit(txt_my_uncle,
+                         (btn_my_uncle.centerx - txt_my_uncle.get_width() // 2, btn_my_uncle.centery - txt_my_uncle.get_height() // 2))
+
         # Mostramos todos los cambios en el "display"
         pygame.display.flip()
 
@@ -175,6 +196,11 @@ class Engine:
                     elif btn_mage.collidepoint(mouse_pos):
                         # Le pasamos una sesion de juego con el mago como personaje seleccionado
                         self.game = GameSession(character_name="mago", multiplayer=False)
+                        self.state = "PLAYING"
+
+                    elif btn_my_uncle.collidepoint(mouse_pos):
+                        # Le pasamos una sesion de juego con el mago como personaje seleccionado
+                        self.game = GameSession(character_name="my_uncle", multiplayer=False)
                         self.state = "PLAYING"
 
     def menu_seleccion_multiplayer(self):

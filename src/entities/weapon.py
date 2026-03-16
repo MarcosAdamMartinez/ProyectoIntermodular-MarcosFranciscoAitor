@@ -39,8 +39,8 @@ class Weapon:
         if direction.length() > 0:
             direction = direction.normalize()
 
-            # Instanciamos un nuevo proyectil entregandole nuestro punto de origen la direccion de vuelo y el poder de dano
-            proj = Projectile(self.owner.pos, direction, self.stats)
+            # Instanciamos un nuevo proyectil entregandole nuestro punto de origen la direccion el poder y quien lo lanza
+            proj = Projectile(self.owner.pos, direction, self.stats, self.owner)
 
             # Agregamos el ataque recien creado a los grupos de dibujo y logica para que el motor grafico lo muestre en la pantalla
             sprite_group.add(proj)

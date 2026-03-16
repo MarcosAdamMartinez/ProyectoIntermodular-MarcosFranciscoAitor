@@ -131,17 +131,28 @@ class GameSession:
         if pygame.sprite.spritecollide(self.local_player, self.enemies, False, collided=pygame.sprite.collide_rect_ratio(0.4)):
             self.local_player.take_damage(1)
 
-        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.4))
+        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.6))
 
         for enemy, projs in hits.items():
             for proj in projs:
-                # Si el enemigo muere al recibir el dano creamos una gema en su posicion
-                if enemy.take_damage(proj.damage):
-                    new_exp = Exp(enemy.pos)
-                    self.exp.add(new_exp)
-                    self.all_sprites.add(new_exp)
-                    self.score += 50
-                proj.kill()
+                # Si el proyectil es un boomerang comprobamos que no haya golpeado ya a este enemigo en este mismo vuelo
+                if getattr(proj, 'is_boomerang', False):
+                    if enemy not in proj.hit_enemies:
+                        if enemy.take_damage(proj.damage):
+                            new_exp = Exp(enemy.pos)
+                            self.exp.add(new_exp)
+                            self.all_sprites.add(new_exp)
+                            self.score += 50
+                        # Guardamos a este enemigo en la memoria del proyectil para ignorarlo en los siguientes fotogramas
+                        proj.hit_enemies.append(enemy)
+                else:
+                    # Si es un proyectil normal hace dano y desaparece inmediatamente al chocar
+                    if enemy.take_damage(proj.damage):
+                        new_exp = Exp(enemy.pos)
+                        self.exp.add(new_exp)
+                        self.all_sprites.add(new_exp)
+                        self.score += 50
+                    proj.kill()
 
         # Comprobamos la distancia de todas las gemas para activar el iman del jugador
         for exp in self.exp:

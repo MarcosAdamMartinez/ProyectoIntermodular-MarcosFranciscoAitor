@@ -105,3 +105,8 @@ class Player(pygame.sprite.Sprite):
                 weapon.stats["cooldown"] = max(10, int(weapon.stats["cooldown"] * upgrade["value"]))
         elif upgrade["type"] == "magnet":
             self.magnet_radius += upgrade["value"]
+        elif upgrade["type"] == "hp":
+            if not self.hp + upgrade["value"] > self.max_hp:
+                self.hp += upgrade["value"]
+            else:
+                self.hp = self.max_hp

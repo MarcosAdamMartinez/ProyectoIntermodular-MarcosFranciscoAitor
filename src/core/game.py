@@ -78,6 +78,9 @@ class GameSession:
         self.spawn_timer = 0
         self.spawn_rate = 60
 
+        self.score = 0
+        self.survival_timer = 0
+
     def update(self):
         # Comprobar si el jugador esta muerto
         if self.local_player.hp <= 0:
@@ -97,6 +100,12 @@ class GameSession:
 
 
     def update_singleplayer(self):
+        self.survival_timer += 1
+
+        if self.survival_timer >= 10:  # A 60 FPS, 10 fotogramas son exactamente 10 puntos por segundo
+            self.score += 1
+            self.survival_timer = 0
+
         # Sumamos 1 por cada tick para llegar al spawn_rate
         self.spawn_timer += 1
 
@@ -131,6 +140,7 @@ class GameSession:
                     new_exp = Exp(enemy.pos)
                     self.exp.add(new_exp)
                     self.all_sprites.add(new_exp)
+                    self.score += 50
                 proj.kill()
 
         # Comprobamos la distancia de todas las gemas para activar el iman del jugador
@@ -193,3 +203,16 @@ class GameSession:
         font = pygame.font.SysFont("Arial", 20, bold=True)
         lvl_text = font.render(f"Nivel: {self.local_player.level}", True, (255, 255, 255))
         screen.blit(lvl_text, (x + bar_width + 15, y + 10))
+
+        # SCOREBOARD
+        font_score = pygame.font.SysFont("Arial", 20, bold=True)
+
+        # Mostramos la variable score pura
+        txt_score = font_score.render(f"Score: {self.score}", True, WHITE)
+
+        # Usamos topright para anclarlo a la esquina superior derecha
+        score_rect = txt_score.get_rect(topright=(WIDTH - 20, 20))
+
+        screen.blit(txt_score, score_rect)
+
+

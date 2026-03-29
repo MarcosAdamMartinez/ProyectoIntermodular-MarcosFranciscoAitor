@@ -2,8 +2,8 @@ import pygame
 import os
 
 # Pantalla
-WIDTH = 1720
-HEIGHT = 920
+WIDTH = 920
+HEIGHT = 520
 FPS = 60
 
 # Colores
@@ -48,11 +48,12 @@ WEAPONS = {
 
 # DATOS DE MEJORAS
 UPGRADES = [
-    {"id": "hp_up", "name": "Corazon Fuerte", "desc": "+20 Vida Maxima y te cura", "type": "max_hp", "value": 20},
+    {"id": "hp_up", "name": "Corazon Fuerte", "desc": "+20 Vida Maxima", "type": "max_hp", "value": 20},
     {"id": "speed_up", "name": "Botas Ligeras", "desc": "+1 Velocidad de movimiento", "type": "speed", "value": 1},
     {"id": "dmg_up", "name": "Fuerza Bruta", "desc": "+5 de daño a todas las armas", "type": "damage", "value": 5},
     {"id": "cd_down", "name": "Manos Rapidas", "desc": "Disparas mas rapido", "type": "cooldown", "value": 0.85},
-    {"id": "magnet_up", "name": "Iman Magico", "desc": "+60 Rango de recogida", "type": "magnet", "value": 60}
+    {"id": "magnet_up", "name": "Iman Magico", "desc": "+60 Rango de recogida", "type": "magnet", "value": 60},
+    {"id": "heal_up", "name": "Beso De La Diosa", "desc": "+40 Barra de vida", "type": "magnet", "value": 60}
 ]
 
 def load_sprite(path, size, fallback_color, remove_bg=True):

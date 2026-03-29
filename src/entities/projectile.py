@@ -3,42 +3,61 @@ import math
 from src.utils.settings import load_sprite
 
 
-# Definimos la clase para nuestros proyectiles heredando de los sprites de Pygame para integrarlos en el motor del juego
+# Definimos la clase para nuestros proyectiles heredando de los sprites de Pygame
 class Projectile(pygame.sprite.Sprite):
-    def __init__(self, pos, direction, stats):
+    def __init__(self, pos, direction, stats, owner):  # Anadimos el owner al init
         super().__init__()
 
-        # Cargamos la imagen original de nuestro proyectil dependiendo del tipo de arma y le asignamos un color por defecto si no existe
-        original_image = load_sprite(f"assets/sprites/{stats['type']}.png", (60, 60), stats["color"])
+        # Guardamos la referencia a quien nos lanzo para saber a donde volver
+        self.owner = owner
 
-        # Calculamos el angulo matematico exacto hacia nuestro objetivo usando arcotangente para saber hacia donde debe mirar el sprite
+        # Comprobamos si esta arma tiene la propiedad de regresar usando get para evitar errores si no existe
+        self.is_boomerang = stats.get("boomerang", False)
+        self.returning = False
+
+        # Creamos una lista vacia para recordar a que enemigos hemos golpeado ya y no hacerles dano infinito
+        self.hit_enemies = []
+
+        # Cargamos la imagen original de nuestro proyectil
+        original_image = load_sprite(f"assets/sprites/{stats['type']}.png", (40, 40), stats["color"])
         angle = math.degrees(math.atan2(-direction.y, direction.x))
-
-        # Rotamos la imagen original una unica vez usando el angulo que acabamos de calcular para que el ataque visualmente apunte a la direccion correcta
         self.image = pygame.transform.rotate(original_image, angle)
 
-        # Centramos la caja de colisiones de nuestro proyectil exactamente en la posicion inicial que recibimos por parametro
         self.rect = self.image.get_rect(center=pos)
-
-        # Guardamos el vector de posicion inicial y la direccion hacia la que volaremos
         self.pos = pygame.math.Vector2(pos)
         self.direction = direction
-
-        # Asignamos la velocidad de vuelo el dano que causaremos al impactar y el tiempo de vida en fotogramas que durara el proyectil
         self.speed = stats["speed"]
         self.damage = stats["damage"]
-        self.lifetime = 120
+
+        # Si es un boomerang este lifetime sera la distancia maxima a la que llegara antes de volver
+        self.lifetime = 30
 
     def update(self):
-        # Actualizamos nuestra posicion en la pantalla sumando a las coordenadas la direccion de movimiento multiplicada por la velocidad
-        self.pos += self.direction * self.speed
+        # Si nuestra arma tiene la propiedad de volver como el platano ejecutamos esta logica
+        if self.is_boomerang:
+            if not self.returning:
+                # Volamos hacia adelante y restamos nuestro tiempo
+                self.pos += self.direction * self.speed
+                self.lifetime -= 1
+                if self.lifetime <= 0:
+                    # Cuando el tiempo se agota activamos el modo de regreso
+                    self.returning = True
+            else:
+                # Calculamos el vector exacto desde nuestra posicion actual hasta la mano del jugador
+                return_dir = self.owner.pos - self.pos
 
-        # Movemos nuestra caja de colisiones para que siempre acompane a la nueva posicion del dibujo en la pantalla
+                # Si estamos lo suficientemente cerca del jugador como para que nos atrape nos eliminamos
+                if return_dir.length() < self.speed + 10:
+                    self.kill()
+                else:
+                    # Si aun estamos lejos volamos directamente hacia el
+                    return_dir = return_dir.normalize()
+                    self.pos += return_dir * (self.speed + 2)  # Volvemos un pelin mas rapido
+        else:
+            # Logica normal para proyectiles que no regresan (magia flechas etc)
+            self.pos += self.direction * self.speed
+            self.lifetime -= 1
+            if self.lifetime <= 0:
+                self.kill()
+
         self.rect.center = self.pos
-
-        # Reducimos el tiempo de vida de nuestro proyectil en cada fotograma para que no viaje por la pantalla eternamente
-        self.lifetime -= 1
-
-        # Comprobamos si el tiempo de vida util ha llegado a su fin y de ser asi eliminamos el proyectil para liberar la memoria del juego
-        if self.lifetime <= 0:
-            self.kill()

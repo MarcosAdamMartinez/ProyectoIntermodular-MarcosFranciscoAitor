@@ -2,8 +2,8 @@ import pygame
 import os
 
 # Pantalla
-WIDTH = 920
-HEIGHT = 520
+WIDTH = 1720
+HEIGHT = 920
 FPS = 60
 
 # Colores
@@ -18,6 +18,7 @@ BAR_GREEN = (0, 255, 0)
 BORDER_GREEN = (20, 80, 20)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
+LIGHT_YELLOW = (255, 255, 100)
 
 # Jugador base
 PLAYER_SIZE = 100
@@ -37,13 +38,21 @@ CHARACTERS = {
         "color": (150, 0, 255),
         "sprite": "assets/sprites/mage.png",
         "starting_weapon": "varita"
+    },
+    "my_uncle": {
+        "speed": 5,
+        "hp": 100,
+        "color": GREY,
+        "sprite": "assets/sprites/my_uncle.png",
+        "starting_weapon": "banana"
     }
 }
 
 # DATOS DE ARMAS
 WEAPONS = {
     "espada": {"cooldown": 60, "damage": 25, "speed": 1.5, "color": WHITE, "type": "melee"},
-    "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"}
+    "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"},
+    "banana": {"cooldown": 30, "damage": 10, "speed": 7, "color": YELLOW, "type": "banana", "boomerang": True}
 }
 
 # DATOS DE MEJORAS
@@ -53,7 +62,7 @@ UPGRADES = [
     {"id": "dmg_up", "name": "Fuerza Bruta", "desc": "+5 de daño a todas las armas", "type": "damage", "value": 5},
     {"id": "cd_down", "name": "Manos Rapidas", "desc": "Disparas mas rapido", "type": "cooldown", "value": 0.85},
     {"id": "magnet_up", "name": "Iman Magico", "desc": "+60 Rango de recogida", "type": "magnet", "value": 60},
-    {"id": "heal_up", "name": "Beso De La Diosa", "desc": "+40 Barra de vida", "type": "magnet", "value": 60}
+    {"id": "health_up", "name": "Beso de la Diosa", "desc": "+40 Vida", "type": "hp", "value": 40}
 ]
 
 def load_sprite(path, size, fallback_color, remove_bg=True):

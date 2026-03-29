@@ -78,6 +78,9 @@ class GameSession:
         self.spawn_timer = 0
         self.spawn_rate = 60
 
+        self.score = 0
+        self.survival_timer = 0
+
     def update(self):
         # Comprobar si el jugador esta muerto
         if self.local_player.hp <= 0:
@@ -97,6 +100,12 @@ class GameSession:
 
 
     def update_singleplayer(self):
+        self.survival_timer += 1
+
+        if self.survival_timer >= 10:  # A 60 FPS, 10 fotogramas son exactamente 10 puntos por segundo
+            self.score += 1
+            self.survival_timer = 0
+
         # Sumamos 1 por cada tick para llegar al spawn_rate
         self.spawn_timer += 1
 
@@ -122,16 +131,28 @@ class GameSession:
         if pygame.sprite.spritecollide(self.local_player, self.enemies, False, collided=pygame.sprite.collide_rect_ratio(0.4)):
             self.local_player.take_damage(1)
 
-        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.4))
+        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.6))
 
         for enemy, projs in hits.items():
             for proj in projs:
-                # Si el enemigo muere al recibir el dano creamos una gema en su posicion
-                if enemy.take_damage(proj.damage):
-                    new_exp = Exp(enemy.pos)
-                    self.exp.add(new_exp)
-                    self.all_sprites.add(new_exp)
-                proj.kill()
+                # Si el proyectil es un boomerang comprobamos que no haya golpeado ya a este enemigo en este mismo vuelo
+                if getattr(proj, 'is_boomerang', False):
+                    if enemy not in proj.hit_enemies:
+                        if enemy.take_damage(proj.damage):
+                            new_exp = Exp(enemy.pos)
+                            self.exp.add(new_exp)
+                            self.all_sprites.add(new_exp)
+                            self.score += 50
+                        # Guardamos a este enemigo en la memoria del proyectil para ignorarlo en los siguientes fotogramas
+                        proj.hit_enemies.append(enemy)
+                else:
+                    # Si es un proyectil normal hace dano y desaparece inmediatamente al chocar
+                    if enemy.take_damage(proj.damage):
+                        new_exp = Exp(enemy.pos)
+                        self.exp.add(new_exp)
+                        self.all_sprites.add(new_exp)
+                        self.score += 50
+                    proj.kill()
 
         # Comprobamos la distancia de todas las gemas para activar el iman del jugador
         for exp in self.exp:
@@ -193,3 +214,16 @@ class GameSession:
         font = pygame.font.SysFont("Arial", 20, bold=True)
         lvl_text = font.render(f"Nivel: {self.local_player.level}", True, (255, 255, 255))
         screen.blit(lvl_text, (x + bar_width + 15, y + 10))
+
+        # SCOREBOARD
+        font_score = pygame.font.SysFont("Arial", 20, bold=True)
+
+        # Mostramos la variable score pura
+        txt_score = font_score.render(f"Score: {self.score}", True, WHITE)
+
+        # Usamos topright para anclarlo a la esquina superior derecha
+        score_rect = txt_score.get_rect(topright=(WIDTH - 20, 20))
+
+        screen.blit(txt_score, score_rect)
+
+

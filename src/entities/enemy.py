@@ -47,6 +47,13 @@ class Enemy(pygame.sprite.Sprite):
 
         self.target = target
 
+        # --- CARGAR SONIDO DE RECIBIR DAÑO (ÚNICO SONIDO DEL ENEMIGO) ---
+        try:
+            self.hurt_sound = pygame.mixer.Sound(f"assets/sounds/enemies/{enemy_type}_hurt.mp3")
+            self.hurt_sound.set_volume(0.04)
+        except:
+            self.hurt_sound = None
+
     def update(self):
         direction = (self.target.pos - self.pos)
 
@@ -56,6 +63,10 @@ class Enemy(pygame.sprite.Sprite):
             self.rect.center = self.pos
 
     def take_damage(self, amount):
+        # --- REPRODUCIR SONIDO AL RECIBIR DAÑO ---
+        if self.hurt_sound:
+            self.hurt_sound.play()
+
         self.hp -= amount
         if self.hp <= 0:
             self.kill()

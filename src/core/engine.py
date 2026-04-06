@@ -3,8 +3,6 @@ import sys
 import socket
 import json
 
-import pygame
-
 from src.utils.settings import *
 from src.core.game import GameSession
 
@@ -12,6 +10,10 @@ from src.core.game import GameSession
 class Engine:
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()
+
+        self.music_state = "NONE"
+
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Punternows Salvation: The Last Chance")
         self.clock = pygame.time.Clock()
@@ -105,8 +107,21 @@ class Engine:
             except Exception as e:
                 print(f"Error pidiendo scores: {e}")
 
+    def update_music(self):
+        """Gestiona la música de fondo dependiendo del estado del juego."""
+        if self.state in ["MENU_PRINCIPAL", "MENU_LOGIN", "MENU_REGISTER", "GAME_OVER", "MENU_SELECCION_MODO",
+                            "MENU_SELECCION_SOLO"] and self.music_state != "MENU":
+            try:
+                pygame.mixer.music.load("assets/sounds/music_menu.mp3")
+                pygame.mixer.music.play(-1)
+                pygame.mixer.music.set_volume(0.04)
+                self.music_state = "MENU"
+            except:
+                print("No se encontro assets/sounds/music_menu.mp3")
+
     def run(self):
         while True:
+            self.update_music()
             if self.state == "MENU_PRINCIPAL":
                 self.menu_principal_loop()
             elif self.state == "MENU_LOGIN":

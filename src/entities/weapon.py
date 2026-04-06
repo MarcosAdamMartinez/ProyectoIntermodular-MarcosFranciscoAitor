@@ -16,6 +16,14 @@ class Weapon:
         # Inicializamos un temporizador a cero para controlar el tiempo exacto que debemos esperar entre cada ataque
         self.cooldown_timer = 0
 
+        # --- CARGAR SONIDO DEL ARMA ---
+        try:
+            # Carga un sonido específico con el mismo nombre que el arma (ej: pistol.wav, shotgun.wav)
+            self.shoot_sound = pygame.mixer.Sound(f"assets/sounds/weapons/{name}.mp3")
+            self.shoot_sound.set_volume(0.04)
+        except:
+            self.shoot_sound = None
+
     def update(self, enemies, sprite_group, proj_group):
         # Aumentamos nuestro contador de tiempo en cada fotograma que procesa el motor del juego
         self.cooldown_timer += 1
@@ -45,3 +53,7 @@ class Weapon:
             # Agregamos el ataque recien creado a los grupos de dibujo y logica para que el motor grafico lo muestre en la pantalla
             sprite_group.add(proj)
             proj_group.add(proj)
+
+            # --- REPRODUCIR SONIDO AL DISPARAR ---
+            if self.shoot_sound:
+                self.shoot_sound.play()

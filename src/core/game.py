@@ -69,6 +69,21 @@ class GameSession:
         self.survival_timer = 0
         self.generated_chunks = set()
 
+        # --- CARGAR SONIDOS DE GAMEPLAY ---
+        try:
+            # Iniciar la música de fondo del juego
+            pygame.mixer.music.load("assets/sounds/music_game.mp3")
+            pygame.mixer.music.play(-1)
+            pygame.mixer.music.set_volume(0.01)
+
+            # Sonido al recibir daño el jugador
+            self.player_hurt_sound = pygame.mixer.Sound("assets/sounds/player/player_hurt.mp3")
+            self.player_hurt_sound.set_volume(0.05)
+
+        except:
+            print("Faltan archivos de audio en assets/sounds/")
+            self.player_hurt_sound = None
+
     def update(self, username, socket):
         if self.local_player.hp <= 0:
             subir_score = f"sbsc:{username}:{self.local_player.level}:{self.score}\n"
@@ -107,7 +122,7 @@ class GameSession:
                             new_bush = Bush((bx, by))
                             self.all_sprites.add(new_bush)
 
-                            # SISTEMA DE PUNTOS
+        # SISTEMA DE PUNTOS
         self.survival_timer += 1
         if self.survival_timer >= 10:
             self.score += 1
@@ -209,9 +224,13 @@ class GameSession:
         # Aplicamos el daño una sola vez por fotograma si algún enemigo nos ha alcanzado
         if damage_taken:
             self.local_player.take_damage(1)
+            # --- SONIDO AL RECIBIR DAÑO ---
+            if self.player_hurt_sound:
+                self.player_hurt_sound.play()
 
         # COLISIONES DE ARMAS Y LOOT DE EXPERIENCIA DINÁMICA
-        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.5))
+        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False,
+                                          collided=pygame.sprite.collide_rect_ratio(0.5))
 
         for enemy, projs in hits.items():
             for proj in projs:
@@ -268,6 +287,7 @@ class GameSession:
                                                 collided=pygame.sprite.collide_rect_ratio(0.5))
         for gem in collected:
             self.local_player.gain_xp(gem.xp_value)
+
 
     def draw(self, screen):
         self.all_sprites.custom_draw(self.local_player)

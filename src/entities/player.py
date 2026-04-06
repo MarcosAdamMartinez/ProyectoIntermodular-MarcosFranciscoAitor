@@ -43,6 +43,12 @@ class Player(pygame.sprite.Sprite):
 
         self.pending_level_ups = 0
 
+        try:
+            self.level_up_sound = pygame.mixer.Sound("assets/sounds/player/level_up.mp3")
+            self.level_up_sound.set_volume(0.05)
+        except:
+            self.level_up_sound = None
+
     def add_weapon(self, weapon_name):
         # Creamos una funcion para poder equipar nuevas armas al inventario de nuestro personaje durante la partida
         self.weapons.append(Weapon(weapon_name, self))
@@ -85,6 +91,8 @@ class Player(pygame.sprite.Sprite):
             self.level_up()
 
     def level_up(self):
+        self.level_up_sound.play()
+
         # Restamos la experiencia requerida por si recogimos de mas y subimos el nivel
         self.xp -= self.xp_to_next_level
         self.level += 1

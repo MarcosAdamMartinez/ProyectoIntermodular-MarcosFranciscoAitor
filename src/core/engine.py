@@ -97,6 +97,8 @@ class Engine:
                 self.menu_principal_loop()
             elif self.state == "MENU_LOGIN":
                 self.menu_login_loop()
+            elif self.state == "MENU_REGISTER":
+                self.menu_register_loop()
             elif self.state == "MENU_SELECCION_MODO":
                 self.menu_seleccion_modo_loop()
             elif self.state == "MENU_SELECCION_SOLO":
@@ -244,6 +246,7 @@ class Engine:
 
         font_title = pygame.font.SysFont("Arial", 40, bold=True)
         font_input = pygame.font.SysFont("Arial", 28)
+        font_small = pygame.font.SysFont("Arial", 20, bold=True)
 
         title = font_title.render("INICIO DE SESION", True, WHITE)
         title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 150))
@@ -287,6 +290,12 @@ class Engine:
         self.draw_modern_button(btn_log, "ENTRAR", font_title)
         self.draw_modern_button(btn_volver, "VOLVER ATRAS", font_title)
 
+        # --- SECCIÓN NUEVA: ENLACE AL REGISTRO ---
+        txt_need_reg = font_small.render("¿Necesitas registrarte?", True, WHITE)
+        self.screen.blit(txt_need_reg, (30, HEIGHT - 110))
+        btn_go_register = pygame.Rect(30, HEIGHT - 80, 220, 40)
+        self.draw_modern_button(btn_go_register, "Ir a Registro", font_small)
+
         if self.login_error_msg != "":
             font_error = pygame.font.SysFont("Arial", 30, bold=True)
             txt_err = font_error.render(self.login_error_msg, True, (255, 50, 50))
@@ -328,7 +337,8 @@ class Engine:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.network_socket.close()
+                if self.network_socket:
+                    self.network_socket.close()
                 pygame.quit()
                 sys.exit()
 
@@ -351,7 +361,7 @@ class Engine:
                         self.network_socket.connect((host, post))
 
                         # Enviamos los datos
-                        mensaje = f"{self.username_text}:{self.password_text}\n"
+                        mensaje = f"l:{self.username_text}:{self.password_text}\n"
                         self.network_socket.sendall(mensaje.encode())
 
                         # Recibimos respuesta
@@ -359,10 +369,12 @@ class Engine:
 
                         if respuesta == "ENTRAR":
                             self.state = "MENU_SELECCION_MODO"
-                            # ¡IMPORTANTE! Aquí NO cerramos el socket. Lo dejamos abierto en self.network_socket
                         elif respuesta == "INCORRECTO":
                             self.login_error_msg = "Contraseña incorrecta"
-                            self.network_socket.close()  # Si falla, sí lo cerramos
+                            self.network_socket.close()
+                        elif respuesta == "INSUFICIENTE":
+                            self.login_error_msg = "Faltan datos por completar"
+                            self.network_socket.close()
                         elif respuesta == "INEXISTENTE":
                             self.login_error_msg = "No existe el usuario, compruebelo de nuevo o registrese"
                             self.network_socket.close()
@@ -372,12 +384,197 @@ class Engine:
                         if self.network_socket:
                             self.network_socket.close()
 
+                elif btn_volver.collidepoint(mouse_pos):
+                    self.state = "MENU_PRINCIPAL"
+                    self.username_text = ""
+                    self.password_text = ""
+                    self.active_input = None
+                    self.login_error_msg = ""
+
+                # --- NUEVA LÓGICA: IR A REGISTRO ---
+                elif btn_go_register.collidepoint(mouse_pos):
+                    self.state = "MENU_REGISTER"
+                    self.username_text = ""
+                    self.password_text = ""
+                    self.active_input = None
+                    self.login_error_msg = ""
+
+            if event.type == pygame.KEYDOWN:
+                if self.active_input == "username":
+                    if event.key == pygame.K_BACKSPACE:
+                        self.username_text = self.username_text[:-1]
+                    elif event.key == pygame.K_TAB:
+                        self.active_input = "password"
+                    else:
+                        if len(self.username_text) < 15 and event.unicode.isprintable():
+                            self.username_text += event.unicode
+
+                elif self.active_input == "password":
+                    if event.key == pygame.K_BACKSPACE:
+                        self.password_text = self.password_text[:-1]
+                    elif event.key == pygame.K_RETURN:
+                        self.state = "MENU_SELECCION_MODO"
+                    else:
+                        if len(self.password_text) < 15 and event.unicode.isprintable():
+                            self.password_text += event.unicode
+
+    def menu_register_loop(self):
+        self.screen.blit(self.main_menu_bg, (0, 0))
+
+        font_title = pygame.font.SysFont("Arial", 40, bold=True)
+        font_input = pygame.font.SysFont("Arial", 28)
+        font_small = pygame.font.SysFont("Arial", 20, bold=True)
+
+        title = font_title.render("REGISTRO DE NUEVO USUARIO", True, WHITE)
+        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 150))
+        self.screen.blit(title, title_rect)
+
+        input_width = 400
+        input_height = 50
+        btn_width = 450
+        btn_height = 60
+
+        user_rect = pygame.Rect(WIDTH // 2 - input_width // 2, HEIGHT // 2 - 70, input_width, input_height)
+        pass_rect = pygame.Rect(WIDTH // 2 - input_width // 2, HEIGHT // 2 + 10, input_width, input_height)
+
+        btn_log = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 120, btn_width, btn_height)
+        btn_volver = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 200, btn_width, btn_height)
+
+        color_active = (50, 150, 255)
+        color_inactive = (95, 99, 104)
+
+        color_user = color_active if self.active_input == "username" else color_inactive
+        color_pass = color_active if self.active_input == "password" else color_inactive
+
+        pygame.draw.rect(self.screen, (32, 33, 36), user_rect, border_radius=8)
+        pygame.draw.rect(self.screen, color_user, user_rect, width=2, border_radius=8)
+
+        pygame.draw.rect(self.screen, (32, 33, 36), pass_rect, border_radius=8)
+        pygame.draw.rect(self.screen, color_pass, pass_rect, width=2, border_radius=8)
+
+        if self.username_text == "":
+            txt_user = font_input.render("Nombre de usuario", True, (150, 150, 150))
+        else:
+            txt_user = font_input.render(self.username_text, True, WHITE)
+        self.screen.blit(txt_user, (user_rect.x + 15, user_rect.y + 10))
+
+        if self.password_text == "":
+            txt_pass = font_input.render("Contraseña", True, (150, 150, 150))
+        else:
+            txt_pass = font_input.render("*" * len(self.password_text), True, WHITE)
+        self.screen.blit(txt_pass, (pass_rect.x + 15, pass_rect.y + 10))
+
+        self.draw_modern_button(btn_log, "REGISTRARSE", font_title)
+        self.draw_modern_button(btn_volver, "VOLVER ATRAS", font_title)
+
+        # --- SECCIÓN NUEVA: ENLACE AL LOGIN ---
+        txt_have_acc = font_small.render("¿Ya tienes cuenta?", True, WHITE)
+        self.screen.blit(txt_have_acc, (30, HEIGHT - 110))
+        btn_go_login = pygame.Rect(30, HEIGHT - 80, 220, 40)
+        self.draw_modern_button(btn_go_login, "Ir a Login", font_small)
+
+        if self.login_error_msg != "":
+            font_error = pygame.font.SysFont("Arial", 30, bold=True)
+            txt_err = font_error.render(self.login_error_msg, True, (255, 50, 50))
+
+            margen_x = 10
+            margen_y = 5
+            ancho_caja = txt_err.get_width() + (margen_x * 2)
+            alto_caja = txt_err.get_height() + (margen_y * 2)
+
+            caja_fondo = pygame.Surface((ancho_caja, alto_caja), pygame.SRCALPHA)
+            caja_fondo.fill((0, 0, 0, 150))
+
+            pos_x = WIDTH // 2 - ancho_caja // 2
+            pos_y = HEIGHT // 2 + 65
+
+            self.screen.blit(caja_fondo, (pos_x, pos_y))
+            self.screen.blit(txt_err, (WIDTH // 2 - txt_err.get_width() // 2, HEIGHT // 2 + 70))
+
+        icon_size = 80
+        margin = 20
+
+        settings_x = WIDTH - icon_size - margin
+        settings_y = margin
+
+        btn_settings = pygame.Rect(settings_x, settings_y, icon_size, icon_size)
+
+        mouse_pos = pygame.mouse.get_pos()
+
+        if btn_settings.collidepoint(mouse_pos):
+            hover_surface = pygame.Surface((icon_size, icon_size - 20), pygame.SRCALPHA)
+            pygame.draw.rect(hover_surface, (60, 64, 67, 180), hover_surface.get_rect(), border_radius=10)
+            self.screen.blit(hover_surface, (settings_x, settings_y))
+
+        self.screen.blit(self.settings_icon, (settings_x, settings_y))
+
+        pygame.display.flip()
+
+        self.menu_anterior = "MENU_PRINCIPAL"
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                if self.network_socket:
+                    self.network_socket.close()
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if user_rect.collidepoint(mouse_pos):
+                    self.active_input = "username"
+                elif pass_rect.collidepoint(mouse_pos):
+                    self.active_input = "password"
+                elif btn_settings.collidepoint(mouse_pos):
+                    self.state = "MENU_SETTINGS"
+                else:
+                    self.active_input = None
+
+                if btn_log.collidepoint(mouse_pos):
+                    host = "127.0.0.1"
+                    post = 6667
+
+                    try:
+                        self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        self.network_socket.connect((host, post))
+
+                        # Enviamos los datos
+                        mensaje = f"r:{self.username_text}:{self.password_text}\n"
+                        self.network_socket.sendall(mensaje.encode())
+
+                        # Recibimos respuesta
+                        respuesta = self.network_socket.recv(1024).decode().strip()
+
+                        if respuesta == "ENTRAR":
+                            self.state = "MENU_SELECCION_MODO"
+                        elif respuesta == "EXISTENTE":
+                            self.login_error_msg = "El usuario ya existe"
+                            self.network_socket.close()
+                        elif respuesta == "INSUFICIENTE":
+                            self.login_error_msg = "Faltan datos por completar"
+                            self.network_socket.close()
+                        elif respuesta == "ERROR_SERVIDOR":
+                            self.login_error_msg = "Error al registrar el nuevo usuario"
+                            self.network_socket.close()
+
+                    except Exception as e:
+                        self.login_error_msg = "Error al conectar con el servidor"
+                        if self.network_socket:
+                            self.network_socket.close()
 
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = "MENU_PRINCIPAL"
                     self.username_text = ""
                     self.password_text = ""
                     self.active_input = None
+                    self.login_error_msg = ""
+
+                # --- NUEVA LÓGICA: IR A LOGIN ---
+                elif btn_go_login.collidepoint(mouse_pos):
+                    self.state = "MENU_LOGIN"
+                    self.username_text = ""
+                    self.password_text = ""
+                    self.active_input = None
+                    self.login_error_msg = ""
 
             if event.type == pygame.KEYDOWN:
                 if self.active_input == "username":

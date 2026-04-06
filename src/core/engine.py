@@ -2,7 +2,8 @@ import random
 import sys
 import socket
 import json
-from asyncio.windows_events import NULL
+
+import pygame
 
 from src.utils.settings import *
 from src.core.game import GameSession
@@ -30,6 +31,10 @@ class Engine:
         self.active_input = None
         self.login_error_msg = ""
 
+        # Variables del Scoreboard
+        self.scoreboard_data = []
+        self.last_basc_time = 0
+
         # Variable para saber en que menu volver del settings
         self.menu_anterior = "MENU_PRINCIPAL"
 
@@ -50,16 +55,13 @@ class Engine:
             print("Error loading settings")
 
         if self.fullscreen:
-            # Esto escala el juego a tu monitor manteniendo las proporciones
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
         else:
-            # Volvemos al modo ventana normal
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
         pygame.key.set_repeat(500, 50)
 
         self.network_socket = None
-        self.username = ""
 
     def draw_modern_button(self, rect, text, font, *color):
         mouse_pos = pygame.mouse.get_pos()
@@ -89,12 +91,19 @@ class Engine:
                          (rect.centerx - txt_surf.get_width() // 2, rect.centery - txt_surf.get_height() // 2))
 
     def draw_fps(self):
-        # Dibuja el contador de FPS en la esquina superior izquierda
         font_fps = pygame.font.SysFont("Arial", 18, bold=True)
         fps_txt = font_fps.render(f"FPS: {int(self.clock.get_fps())}", True, WHITE)
         fps_rect = fps_txt.get_rect(topright=(WIDTH - 20, 50))
-
         self.screen.blit(fps_txt, fps_rect)
+
+    def get_scoreboard(self):
+        """Envía la orden al servidor para obtener los scores."""
+        if self.network_socket:
+            try:
+                self.network_socket.sendall("basc:u:s\n".encode())
+                self.last_basc_time = pygame.time.get_ticks()
+            except Exception as e:
+                print(f"Error pidiendo scores: {e}")
 
     def run(self):
         while True:
@@ -114,7 +123,7 @@ class Engine:
                 self.menu_score_loop()
             elif self.state == "MENU_SETTINGS":
                 self.menu_settings_loop()
-            elif self.state == "PAUSE_MENU":  # <--- NUEVO ESTADO DE PAUSA
+            elif self.state == "PAUSE_MENU":
                 self.pause_menu_loop()
             elif self.state == "PLAYING":
                 self.game_loop()
@@ -350,8 +359,6 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    self.username = self.username_text
-
                     host = "127.0.0.1"
                     post = 6667
                     try:
@@ -406,7 +413,7 @@ class Engine:
                     if event.key == pygame.K_BACKSPACE:
                         self.password_text = self.password_text[:-1]
                     elif event.key == pygame.K_RETURN:
-                        pass  # Login logica
+                        pass
                     else:
                         if len(self.password_text) < 15 and event.unicode.isprintable():
                             self.password_text += event.unicode
@@ -631,6 +638,8 @@ class Engine:
                     self.state = "MENU_SELECCION_MULTIPLAYER"
                 elif btn_score.collidepoint(mouse_pos):
                     self.state = "MENU_SELECCION_SCORE"
+                    # Forzamos que se pida el score nada mas entrar
+                    self.last_basc_time = 0
                 elif btn_settings.collidepoint(mouse_pos):
                     self.state = "MENU_SETTINGS"
                 elif btn_menu_principal.collidepoint(mouse_pos):
@@ -750,24 +759,61 @@ class Engine:
                     self.state = "MENU_SETTINGS"
 
     def menu_score_loop(self):
+        # LOGICA DE ACTUALIZACION DE DATOS
+        ahora = pygame.time.get_ticks()
+        if ahora - self.last_basc_time > 15000:
+            self.get_scoreboard()
+
+        # Comprobamos si el servidor ha respondido de forma asincrona (no bloqueante)
+        if self.network_socket:
+            try:
+                self.network_socket.setblocking(False)
+                data = self.network_socket.recv(4096).decode().strip()
+                if data.startswith("basc"):
+                    # El formato es "basc:user1,1000:user2,800"
+                    partes = data.split(":")
+                    if len(partes) > 1:
+                        self.scoreboard_data = []
+                        for p in partes[1:]:
+                            if "," in p:
+                                u, s = p.split(",")
+                                self.scoreboard_data.append((u, s))
+            except (BlockingIOError, socket.error):
+                pass  # Aún no hay datos
+            finally:
+                self.network_socket.setblocking(True)  # Devolvemos a modo bloqueante normal
+
+        # LOGICA DE DIBUJO
         self.screen.blit(self.main_menu_bg, (0, 0))
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         self.screen.blit(overlay, (0, 0))
 
         font = pygame.font.SysFont("Arial", 40, bold=True)
-        font_small = pygame.font.SysFont("Arial", 25)
+        font_small = pygame.font.SysFont("Arial", 30)
 
         title = font.render("TABLA DE CLASIFICACION", True, WHITE)
         title_rect = title.get_rect(center=(WIDTH // 2, 100))
         self.screen.blit(title, title_rect)
 
-        panel_rect = pygame.Rect(WIDTH // 2 - 350, 180, 700, 350)
+        panel_rect = pygame.Rect(WIDTH // 2 - 350, 180, 700, 450)
         pygame.draw.rect(self.screen, (32, 33, 36, 220), panel_rect, border_radius=15)
         pygame.draw.rect(self.screen, (95, 99, 104), panel_rect, width=2, border_radius=15)
 
-        txt_placeholder = font_small.render("Conectando con base de datos PostgreSQL...", True, (200, 200, 200))
-        self.screen.blit(txt_placeholder, txt_placeholder.get_rect(center=(WIDTH // 2, 350)))
+        # DIBUJAMOS LOS DATOS
+        start_y = 220
+        if not self.scoreboard_data:
+            txt_placeholder = font_small.render("Cargando datos...", True, (200, 200, 200))
+            self.screen.blit(txt_placeholder, txt_placeholder.get_rect(center=(WIDTH // 2, 400)))
+        else:
+            for i, (user, score) in enumerate(self.scoreboard_data):
+                txt_rank = font_small.render(f"#{i + 1}", True, (255, 215, 0) if i == 0 else (200, 200, 200))
+                txt_user = font_small.render(user, True, WHITE)
+                txt_score = font_small.render(f"{score} pts", True, LIGHT_YELLOW)
+
+                self.screen.blit(txt_rank, (WIDTH // 2 - 280, start_y + i * 40))
+                self.screen.blit(txt_user, (WIDTH // 2 - 150, start_y + i * 40))
+                self.screen.blit(txt_score, (WIDTH // 2 + 150, start_y + i * 40))
 
         btn_width = 450
         btn_height = 70
@@ -819,7 +865,8 @@ class Engine:
                     self.state = "PAUSE_MENU"
                     return
 
-        estado_juego = self.game.update(self.username ,self.network_socket)
+                    # Pasamos el usuario y el socket al game para que guarde el score si morimos
+        estado_juego = self.game.update(self.username_text, self.network_socket)
 
         if estado_juego == "GAME_OVER":
             self.state = "GAME_OVER"
@@ -837,10 +884,8 @@ class Engine:
         self.clock.tick(FPS)
 
     def pause_menu_loop(self):
-        # Dibujamos el juego de fondo para que parezca congelado
         self.game.draw(self.screen)
 
-        # Aplicamos una capa semitransparente
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
@@ -860,11 +905,10 @@ class Engine:
         self.draw_modern_button(btn_reanudar, "Reanudar", font_btn)
         self.draw_modern_button(btn_abandonar, "Abandonar partida", font_btn)
 
-        # Boton de ajustes
         icon_size = 80
         margin = 20
         settings_x = WIDTH - icon_size - margin
-        settings_y = margin + 50
+        settings_y = margin
 
         btn_settings = pygame.Rect(settings_x, settings_y, icon_size, icon_size)
 
@@ -888,7 +932,6 @@ class Engine:
                 pygame.quit()
                 sys.exit()
 
-            # Volver a jugar si pulsa ESC
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.state = "PLAYING"
@@ -897,7 +940,6 @@ class Engine:
                 if btn_reanudar.collidepoint(mouse_pos):
                     self.state = "PLAYING"
                 elif btn_abandonar.collidepoint(mouse_pos):
-                    # Mandamos al usuario a la selección de modo
                     self.state = "MENU_SELECCION_MODO"
                 elif btn_settings.collidepoint(mouse_pos):
                     self.state = "MENU_SETTINGS"
@@ -948,7 +990,6 @@ class Engine:
         mouse_pos = pygame.mouse.get_pos()
         clicked = False
 
-        # Bucle de eventos único para recoger el clic
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 if self.network_socket:

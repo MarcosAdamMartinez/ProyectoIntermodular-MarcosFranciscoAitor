@@ -71,8 +71,9 @@ class GameSession:
 
     def update(self, username, socket):
         if self.local_player.hp <= 0:
-            subir_score = f"sbsc:{username}:{self.score}\n"
+            subir_score = f"sbsc:{username}:{self.local_player.level}:{self.score}\n"
             socket.sendall(subir_score.encode())
+            print("Intento de mansaje exitoso")
             return "GAME_OVER"
 
         if self.local_player.pending_level_ups > 0:
@@ -90,7 +91,7 @@ class GameSession:
         return "PLAYING"
 
     def update_singleplayer(self):
-        # 1. GENERACIÓN PROCEDURAL DE ARBUSTOS
+        # GENERACIÓN PROCEDURAL DE ARBUSTOS
         chunk_size = 512
         px, py = self.local_player.pos.x, self.local_player.pos.y
         cx, cy = int(px // chunk_size), int(py // chunk_size)
@@ -106,13 +107,13 @@ class GameSession:
                             new_bush = Bush((bx, by))
                             self.all_sprites.add(new_bush)
 
-                            # 2. SISTEMA DE PUNTOS
+                            # SISTEMA DE PUNTOS
         self.survival_timer += 1
         if self.survival_timer >= 10:
             self.score += 1
             self.survival_timer = 0
 
-        # 3. SISTEMA DE FASES Y SPAWN DE ENEMIGOS
+        # SISTEMA DE FASES Y SPAWN DE ENEMIGOS
         self.spawn_timer += 1
         if self.spawn_timer >= self.spawn_rate:
 
@@ -162,7 +163,7 @@ class GameSession:
                 if self.spawn_rate > 5:
                     self.spawn_rate -= 0.2
 
-        # 4. FÍSICAS RIGIDAS OPTIMIZADAS (Anti-Lag)
+        # FÍSICAS RIGIDAS
         enemies_list = list(self.enemies)
         for i in range(len(enemies_list)):
             e1 = enemies_list[i]
@@ -209,8 +210,8 @@ class GameSession:
         if damage_taken:
             self.local_player.take_damage(1)
 
-        # 5. COLISIONES DE ARMAS Y LOOT DE EXPERIENCIA DINÁMICA
-        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False)
+        # COLISIONES DE ARMAS Y LOOT DE EXPERIENCIA DINÁMICA
+        hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False, collided=pygame.sprite.collide_rect_ratio(0.5))
 
         for enemy, projs in hits.items():
             for proj in projs:
@@ -218,7 +219,7 @@ class GameSession:
                     if enemy not in proj.hit_enemies:
                         if enemy.take_damage(proj.damage):
 
-                            # --- CALCULAMOS LA EXPERIENCIA SEGUN EL TIPO ---
+                            # CALCULAMOS LA EXPERIENCIA SEGUN EL TIPO
                             xp_amount = 10
                             if enemy.enemy_type == "goblin":
                                 xp_amount = 30

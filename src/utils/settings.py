@@ -35,7 +35,7 @@ CHARACTERS = {
         "hp": 150,
         "color": BLUE,
         "sprite": "assets/sprites/knight.png",
-        "starting_weapon": "espada"
+        "starting_weapon": "espada"  # Eliminamos el "melee": True de aqui
     },
     "mago": {
         "speed": 6,
@@ -55,7 +55,7 @@ CHARACTERS = {
 
 # DATOS DE ARMAS
 WEAPONS = {
-    "espada": {"cooldown": 60, "damage": 25, "speed": 1.5, "color": WHITE, "type": "melee"},
+    "espada": {"cooldown": 60, "damage": 25, "speed": 0, "color": WHITE, "type": "melee", "melee": True},
     "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"},
     "banana": {"cooldown": 30, "damage": 10, "speed": 7, "color": YELLOW, "type": "banana", "boomerang": True}
 }

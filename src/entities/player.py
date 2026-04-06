@@ -13,7 +13,10 @@ class Player(pygame.sprite.Sprite):
         stats = CHARACTERS[character_name]
 
         # Cargamos el sprite de nuestro heroe ajustando su tamano y definiendo un color de respaldo por si falla la imagen
-        self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 30, PLAYER_SIZE), stats["color"])
+        if character_name == "my_uncle":
+            self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 60, PLAYER_SIZE - 10), stats["color"])
+        else:
+            self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 30, PLAYER_SIZE), stats["color"])
 
         # Preparamos la caja de colisiones y el vector de posicion exacta en el mapa
         self.rect = self.image.get_rect(center=(x, y))

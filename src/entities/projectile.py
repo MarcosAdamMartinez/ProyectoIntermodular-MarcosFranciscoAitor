@@ -2,62 +2,79 @@ import pygame
 import math
 from src.utils.settings import load_sprite
 
-
-# Definimos la clase para nuestros proyectiles heredando de los sprites de Pygame
 class Projectile(pygame.sprite.Sprite):
-    def __init__(self, pos, direction, stats, owner):  # Anadimos el owner al init
+    def __init__(self, pos, direction, stats, owner):
         super().__init__()
 
-        # Guardamos la referencia a quien nos lanzo para saber a donde volver
         self.owner = owner
-
-        # Comprobamos si esta arma tiene la propiedad de regresar usando get para evitar errores si no existe
+        self.stats = stats
         self.is_boomerang = stats.get("boomerang", False)
+        self.is_melee = stats.get("melee", False)
         self.returning = False
-
-        # Creamos una lista vacia para recordar a que enemigos hemos golpeado ya y no hacerles dano infinito
         self.hit_enemies = []
 
-        # Cargamos la imagen original de nuestro proyectil
-        original_image = load_sprite(f"assets/sprites/{stats['type']}.png", (40, 40), stats["color"])
-        angle = math.degrees(math.atan2(-direction.y, direction.x))
-        self.image = pygame.transform.rotate(original_image, angle)
-
-        self.rect = self.image.get_rect(center=pos)
-        self.pos = pygame.math.Vector2(pos)
-        self.direction = direction
         self.speed = stats["speed"]
         self.damage = stats["damage"]
+        self.direction = direction
 
-        # Si es un boomerang este lifetime sera la distancia maxima a la que llegara antes de volver
-        self.lifetime = 30
+        # --- NUEVO: Guardamos la posicion exacta desde donde se lanzo ---
+        self.origin_pos = pygame.math.Vector2(pos)
+
+        if self.is_melee:
+            w_size = (90, 90)
+        elif self.is_boomerang:
+            w_size = (50, 50)
+        else:
+            w_size = (70, 70)
+
+        self.original_image = load_sprite(f"assets/sprites/{stats['type']}.png", w_size, stats["color"])
+
+        if self.is_melee:
+            self.original_image = load_sprite(f"assets/sprites/melee.png", w_size, stats["color"])
+            self.base_angle = math.degrees(math.atan2(-direction.y, direction.x))
+            self.current_angle = self.base_angle + 45
+            self.sweep_speed = -3
+            self.distance = 45
+
+            self._update_melee_pos()
+        else:
+            angle = math.degrees(math.atan2(-direction.y, direction.x))
+            self.image = pygame.transform.rotate(self.original_image, angle)
+            self.rect = self.image.get_rect(center=pos)
+            self.pos = pygame.math.Vector2(pos)
+            self.lifetime = 30
+
+    def _update_melee_pos(self):
+        offset = pygame.math.Vector2(self.distance, 0).rotate(-self.current_angle)
+        self.pos = self.owner.pos + offset
+        self.image = pygame.transform.rotate(self.original_image, self.current_angle - 45)
+        self.rect = self.image.get_rect(center=self.pos)
 
     def update(self):
-        # Si nuestra arma tiene la propiedad de volver como el platano ejecutamos esta logica
-        if self.is_boomerang:
+        if self.is_melee:
+            self.current_angle += self.sweep_speed
+            self._update_melee_pos()
+            if self.current_angle <= self.base_angle - 45:
+                self.kill()
+
+        elif self.is_boomerang:
             if not self.returning:
-                # Volamos hacia adelante y restamos nuestro tiempo
                 self.pos += self.direction * self.speed
                 self.lifetime -= 1
                 if self.lifetime <= 0:
-                    # Cuando el tiempo se agota activamos el modo de regreso
                     self.returning = True
             else:
-                # Calculamos el vector exacto desde nuestra posicion actual hasta la mano del jugador
-                return_dir = self.owner.pos - self.pos
-
-                # Si estamos lo suficientemente cerca del jugador como para que nos atrape nos eliminamos
+                # --- NUEVO: Volvemos al origen, no al jugador ---
+                return_dir = self.origin_pos - self.pos
                 if return_dir.length() < self.speed + 10:
                     self.kill()
                 else:
-                    # Si aun estamos lejos volamos directamente hacia el
                     return_dir = return_dir.normalize()
-                    self.pos += return_dir * (self.speed + 2)  # Volvemos un pelin mas rapido
+                    self.pos += return_dir * (self.speed + 2)
+            self.rect.center = self.pos
         else:
-            # Logica normal para proyectiles que no regresan (magia flechas etc)
             self.pos += self.direction * self.speed
             self.lifetime -= 1
             if self.lifetime <= 0:
                 self.kill()
-
-        self.rect.center = self.pos
+            self.rect.center = self.pos

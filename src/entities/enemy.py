@@ -3,51 +3,72 @@ import random
 from src.utils.settings import *
 
 
-# Definimos la clase del enemigo basandonos en los sprites de Pygame para integrarlo en nuestro juego
+# Definimos la clase del enemigo basandonos en los sprites de Pygame
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, target):
+    def __init__(self, target, enemy_type="zombie"):
         super().__init__()
 
-        # Cargamos la imagen de nuestro zombi ajustando sus dimensiones y asignando un color rojo por si la imagen no carga
-        self.image = load_sprite("assets/sprites/zombie.png", (100, 90), RED)
+        self.enemy_type = enemy_type
 
-        # Calculamos el punto de aparicion para que el enemigo nazca en un radio circular constante alrededor del jugador
-        spawn_radius = 400
+        # Asignamos estadisticas y sprites segun el tipo de enemigo
+        if enemy_type == "zombie":
+            size = (100, 90)
+            color = RED
+            self.speed = random.uniform(1.5, 2.5)
+            self.hp = 20
+        elif enemy_type == "goblin":
+            size = (90, 80)
+            color = (0, 150, 0)  # Verde si no hay sprite
+            self.speed = random.uniform(2.0, 3.0)
+            self.hp = 45
+        elif enemy_type == "skeleton":
+            size = (95, 95)
+            color = (200, 200, 200)  # Gris claro si no hay sprite
+            self.speed = random.uniform(2.5, 3.5)
+            self.hp = 80
+        elif enemy_type == "boss":
+            size = (200, 200)
+            color = (150, 0, 0)  # Gran cuadrado rojo oscuro
+            self.speed = random.uniform(1.0, 1.5)
+            self.hp = 500
 
-        # Elegimos un angulo aleatorio y usamos las matematicas de vectores para encontrar la coordenada exacta donde lo colocaremos
+        # Cargamos la imagen correspondiente (Ej: assets/sprites/goblin.png)
+        self.image = load_sprite(f"assets/sprites/{enemy_type}.png", size, color)
+
+        # Calculamos el punto de aparicion circular
+        spawn_radius = 500 if enemy_type == "boss" else 400
+
         angle = random.uniform(0, 360)
         offset = pygame.math.Vector2(spawn_radius, 0).rotate(angle)
         spawn_pos = target.pos + offset
 
-        # Establecemos la caja de colisiones en la posicion calculada y preparamos la variable para guardar su ubicacion actual
         self.rect = self.image.get_rect(center=(spawn_pos.x, spawn_pos.y))
         self.pos = pygame.math.Vector2(spawn_pos)
 
-        # Guardamos la referencia a nuestro jugador objetivo para que el zombi sepa a quien debe perseguir despues
         self.target = target
 
-        # Le asignamos una velocidad al azar para que los enemigos no se muevan todos exactamente igual y definimos su salud inicial
-        self.speed = random.uniform(1.5, 2.5)
-        self.hp = 20
+        # --- CARGAR SONIDO DE RECIBIR DAÑO (ÚNICO SONIDO DEL ENEMIGO) ---
+        try:
+            self.hurt_sound = pygame.mixer.Sound(f"assets/sounds/enemies/{enemy_type}_hurt.mp3")
+            self.hurt_sound.set_volume(0.04)
+        except:
+            self.hurt_sound = None
 
     def update(self):
-        # Calculamos la distancia y la trayectoria exacta entre nosotros y nuestro objetivo principal
         direction = (self.target.pos - self.pos)
 
-        # Verificamos que no hayamos alcanzado ya la misma posicion que el jugador para evitar errores en los calculos
         if direction.length() > 0:
-            # Normalizamos el vector de la direccion para que el movimiento sea fluido e idoneo sin importar hacia donde vayamos
             direction = direction.normalize()
-
-            # Actualizamos nuestra posicion sumando la direccion hacia el objetivo multiplicada por la velocidad que le dimos al nacer
             self.pos += direction * self.speed
-
-            # Centramos la caja de colisiones del enemigo en esta nueva posicion recien calculada
             self.rect.center = self.pos
 
     def take_damage(self, amount):
+        # --- REPRODUCIR SONIDO AL RECIBIR DAÑO ---
+        if self.hurt_sound:
+            self.hurt_sound.play()
+
         self.hp -= amount
         if self.hp <= 0:
             self.kill()
-            return True # Avisamos de que el enemigo acaba de morir
+            return True
         return False

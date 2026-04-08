@@ -19,6 +19,11 @@ BORDER_GREEN = (20, 80, 20)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
 LIGHT_YELLOW = (255, 255, 100)
+DEATH_TEXT = (195, 196, 159)
+BTN_BG = (32, 33, 36)
+BTN_HOVER = (60, 64, 67)
+BTN_BORDER = (95, 99, 104)
+BTN_SHADOW = (15, 15, 18)
 
 # Jugador base
 PLAYER_SIZE = 100
@@ -30,7 +35,7 @@ CHARACTERS = {
         "hp": 150,
         "color": BLUE,
         "sprite": "assets/sprites/knight.png",
-        "starting_weapon": "espada"
+        "starting_weapon": "espada"  # Eliminamos el "melee": True de aqui
     },
     "mago": {
         "speed": 6,
@@ -50,7 +55,7 @@ CHARACTERS = {
 
 # DATOS DE ARMAS
 WEAPONS = {
-    "espada": {"cooldown": 60, "damage": 25, "speed": 1.5, "color": WHITE, "type": "melee"},
+    "espada": {"cooldown": 60, "damage": 25, "speed": 0, "color": WHITE, "type": "melee", "melee": True},
     "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"},
     "banana": {"cooldown": 30, "damage": 10, "speed": 7, "color": YELLOW, "type": "banana", "boomerang": True}
 }

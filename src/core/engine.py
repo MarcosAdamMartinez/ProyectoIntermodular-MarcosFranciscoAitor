@@ -374,7 +374,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "127.0.0.1"
+                    host = "18.203.171.45"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -541,7 +541,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "127.0.0.1"
+                    host = "18.203.171.45"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

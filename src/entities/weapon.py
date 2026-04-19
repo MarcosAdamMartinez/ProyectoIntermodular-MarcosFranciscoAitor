@@ -17,12 +17,16 @@ class Weapon:
         self.cooldown_timer = 0
 
         # --- CARGAR SONIDO DEL ARMA ---
+        self._base_shoot_vol = 0.04
         try:
-            # Carga un sonido específico con el mismo nombre que el arma (ej: pistol.wav, shotgun.wav)
             self.shoot_sound = pygame.mixer.Sound(f"assets/sounds/weapons/{name}.mp3")
-            self.shoot_sound.set_volume(0.04)
+            self.shoot_sound.set_volume(self._base_shoot_vol)
         except:
             self.shoot_sound = None
+
+    def apply_volume_scale(self, factor):
+        if self.shoot_sound:
+            self.shoot_sound.set_volume(self._base_shoot_vol * factor)
 
     def update(self, enemies, sprite_group, proj_group):
         # Aumentamos nuestro contador de tiempo en cada fotograma que procesa el motor del juego

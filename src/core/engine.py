@@ -46,6 +46,8 @@ class Engine:
         # --- VARIABLES DE AJUSTES ---
         self.fullscreen = False
         self.show_fps = False
+        self.volume = 1.0          # 1.0 = 100% (los volúmenes base del código son el 100%)
+        self.dragging_volume = False
         try:
             with open("settings.json", "r", encoding='utf-8') as f:
                 datos = json.load(f)
@@ -53,6 +55,8 @@ class Engine:
                     self.fullscreen = True
                 if datos["fps"]:
                     self.show_fps = True
+                if "volume" in datos:
+                    self.volume = max(0.0, min(1.0, float(datos["volume"])))
         except:
             print("Error loading settings")
 
@@ -107,6 +111,27 @@ class Engine:
             except Exception as e:
                 print(f"Error pidiendo scores: {e}")
 
+    def _vol(self, base):
+        """Escala logarítmica: 100% = base original, 0% = silencio total.
+        Así incluso el 10%-20% sigue siendo claramente audible."""
+        import math
+        if self.volume <= 0:
+            return 0.0
+        factor = math.log10(1 + 9 * self.volume) / math.log10(10)
+        return base * factor
+
+    def apply_volume(self):
+        """Aplica el volumen actual a la música y a todos los efectos de sonido."""
+        import math
+        if self.state == "PLAYING":
+            pygame.mixer.music.set_volume(self._vol(0.01))
+        else:
+            pygame.mixer.music.set_volume(self._vol(0.04))
+        # Propagar a efectos de sonido si hay partida activa
+        if hasattr(self, 'game'):
+            factor = math.log10(1 + 9 * self.volume) / math.log10(10) if self.volume > 0 else 0.0
+            self.game.apply_volume_scale(factor)
+
     def update_music(self):
         """Gestiona la música de fondo dependiendo del estado del juego."""
         if self.state in ["MENU_PRINCIPAL", "MENU_LOGIN", "MENU_REGISTER", "GAME_OVER", "MENU_SELECCION_MODO",
@@ -114,7 +139,7 @@ class Engine:
             try:
                 pygame.mixer.music.load("assets/sounds/music_menu.mp3")
                 pygame.mixer.music.play(-1)
-                pygame.mixer.music.set_volume(0.04)
+                pygame.mixer.music.set_volume(self._vol(0.04))
                 self.music_state = "MENU"
             except:
                 print("No se encontro assets/sounds/music_menu.mp3")
@@ -200,6 +225,22 @@ class Engine:
                     pygame.quit()
                     sys.exit()
 
+    def _save_settings(self):
+        """Guarda todas las opciones en settings.json."""
+        try:
+            with open("settings.json", "r", encoding='utf-8') as f:
+                datos = json.load(f)
+        except:
+            datos = {}
+        datos["fullscreen"] = self.fullscreen
+        datos["fps"] = self.show_fps
+        datos["volume"] = round(self.volume, 3)
+        try:
+            with open("settings.json", "w", encoding='utf-8') as f:
+                f.write(json.dumps(datos, indent=4))
+        except:
+            pass
+
     def menu_settings_loop(self):
         self.screen.blit(self.main_menu_bg, (0, 0))
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -207,27 +248,59 @@ class Engine:
         self.screen.blit(overlay, (0, 0))
 
         font = pygame.font.SysFont("Arial", 40, bold=True)
+        font_small = pygame.font.SysFont("Arial", 26, bold=True)
+
         title = font.render("AJUSTES", True, WHITE)
-        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 150))
+        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 190))
         self.screen.blit(title, title_rect)
 
         btn_width = 450
         btn_height = 70
 
-        btn_fs = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 - 50, btn_width, btn_height)
-        btn_fps = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 40, btn_width, btn_height)
-        btn_volver = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 180, btn_width, btn_height)
+        btn_fs  = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 - 130, btn_width, btn_height)
+        btn_fps = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 - 40,  btn_width, btn_height)
+        btn_volver = pygame.Rect(WIDTH // 2 - btn_width // 2, HEIGHT // 2 + 200, btn_width, btn_height)
 
-        txt_fs = "Pantalla Completa: SI" if self.fullscreen else "Pantalla Completa: NO"
-        txt_fps = "Mostrar FPS: SI" if self.show_fps else "Mostrar FPS: NO"
+        txt_fs  = "Pantalla Completa: SI" if self.fullscreen else "Pantalla Completa: NO"
+        txt_fps = "Mostrar FPS: SI"       if self.show_fps   else "Mostrar FPS: NO"
 
-        self.draw_modern_button(btn_fs, txt_fs, font)
-        self.draw_modern_button(btn_fps, txt_fps, font)
+        self.draw_modern_button(btn_fs,     txt_fs,  font)
+        self.draw_modern_button(btn_fps,    txt_fps, font)
         self.draw_modern_button(btn_volver, "Volver", font)
+
+        # --- BARRA DE VOLUMEN ---
+        slider_w = 450
+        slider_h = 10
+        slider_x = WIDTH // 2 - slider_w // 2
+        slider_y = HEIGHT // 2 + 110   # más separada del botón FPS
+
+        # Etiqueta
+        vol_pct = int(self.volume * 100)
+        lbl = font_small.render(f"Volumen: {vol_pct}%", True, WHITE)
+        self.screen.blit(lbl, lbl.get_rect(center=(WIDTH // 2, slider_y - 30)))
+
+        # Carril de fondo (gris oscuro)
+        rail_rect = pygame.Rect(slider_x, slider_y, slider_w, slider_h)
+        pygame.draw.rect(self.screen, (90, 90, 90), rail_rect, border_radius=5)
+
+        # Relleno activo (gris claro / blanco)
+        fill_w = int(slider_w * self.volume)
+        fill_rect = pygame.Rect(slider_x, slider_y, max(fill_w, 0), slider_h)
+        pygame.draw.rect(self.screen, (210, 210, 210), fill_rect, border_radius=5)
+
+        # Perilla (handle) — blanco con sombra gris
+        handle_x = slider_x + fill_w
+        handle_y = slider_y + slider_h // 2
+        handle_r = 13
+        mouse_pos = pygame.mouse.get_pos()
+        handle_hovered = (abs(mouse_pos[0] - handle_x) < handle_r + 6 and
+                          abs(mouse_pos[1] - handle_y) < handle_r + 6)
+        pygame.draw.circle(self.screen, (60, 60, 60), (handle_x, handle_y + 2), handle_r)   # sombra
+        handle_color = (255, 255, 255) if (handle_hovered or self.dragging_volume) else (200, 200, 200)
+        pygame.draw.circle(self.screen, handle_color, (handle_x, handle_y), handle_r)
 
         pygame.display.flip()
 
-        mouse_pos = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 if self.network_socket:
@@ -236,17 +309,18 @@ class Engine:
                 sys.exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if btn_fs.collidepoint(mouse_pos):
-                    self.fullscreen = not self.fullscreen
-                    try:
-                        with open("settings.json", "r", encoding='utf-8') as f:
-                            datos = json.load(f)
-                            datos["fullscreen"] = self.fullscreen
-                        with open("settings.json", "w", encoding='utf-8') as f:
-                            f.write(json.dumps(datos, indent=4))
-                    except:
-                        pass
+                # ¿Clic sobre la perilla o el carril?
+                if (slider_x - handle_r <= mouse_pos[0] <= slider_x + slider_w + handle_r and
+                        slider_y - handle_r * 2 <= mouse_pos[1] <= slider_y + slider_h + handle_r * 2):
+                    self.dragging_volume = True
+                    # Actualización inmediata al hacer clic en cualquier punto del carril
+                    raw = (mouse_pos[0] - slider_x) / slider_w
+                    self.volume = max(0.0, min(1.0, raw))
+                    self.apply_volume()
 
+                elif btn_fs.collidepoint(mouse_pos):
+                    self.fullscreen = not self.fullscreen
+                    self._save_settings()
                     if self.fullscreen:
                         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
                     else:
@@ -254,17 +328,21 @@ class Engine:
 
                 elif btn_fps.collidepoint(mouse_pos):
                     self.show_fps = not self.show_fps
-                    try:
-                        with open("settings.json", "r", encoding='utf-8') as f:
-                            datos = json.load(f)
-                            datos["fps"] = self.show_fps
-                        with open("settings.json", "w", encoding='utf-8') as f:
-                            f.write(json.dumps(datos, indent=4))
-                    except:
-                        pass
+                    self._save_settings()
 
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = self.menu_anterior
+
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.dragging_volume:
+                    self.dragging_volume = False
+                    self._save_settings()
+
+            if event.type == pygame.MOUSEMOTION:
+                if self.dragging_volume:
+                    raw = (mouse_pos[0] - slider_x) / slider_w
+                    self.volume = max(0.0, min(1.0, raw))
+                    self.apply_volume()
 
     def menu_login_loop(self):
         self.screen.blit(self.main_menu_bg, (0, 0))
@@ -374,7 +452,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "18.203.171.45"
+                    host = "34.243.10.36"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -541,7 +619,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "18.203.171.45"
+                    host = "34.243.10.36"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -712,13 +790,19 @@ class Engine:
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if btn_knight.collidepoint(mouse_pos):
-                    self.game = GameSession(character_name="caballero", multiplayer=False)
+                    self.character_name = "caballero"
+                    self.game = GameSession(character_name="caballero", multiplayer=False, world=1)
+                    self.apply_volume()
                     self.state = "PLAYING"
                 elif btn_mage.collidepoint(mouse_pos):
-                    self.game = GameSession(character_name="mago", multiplayer=False)
+                    self.character_name = "mago"
+                    self.game = GameSession(character_name="mago", multiplayer=False, world=1)
+                    self.apply_volume()
                     self.state = "PLAYING"
                 elif btn_my_uncle.collidepoint(mouse_pos):
-                    self.game = GameSession(character_name="my_uncle", multiplayer=False)
+                    self.character_name = "my_uncle"
+                    self.game = GameSession(character_name="my_uncle", multiplayer=False, world=1)
+                    self.apply_volume()
                     self.state = "PLAYING"
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = "MENU_SELECCION_MODO"
@@ -889,6 +973,20 @@ class Engine:
         elif estado_juego == "LEVEL_UP":
             self.state = "LEVEL_UP"
             self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+        elif estado_juego == "NEXT_WORLD":
+            next_world = self.game.world + 1
+            if next_world <= 3:
+                player = self.game.local_player
+                accumulated_score = self.game.score
+                self.game = GameSession(
+                    character_name=getattr(self, 'character_name', 'caballero'),
+                    multiplayer=False,
+                    world=next_world,
+                    carry_player=player
+                )
+                self.game.score = accumulated_score
+                self.apply_volume()
+            return
 
         self.game.draw(self.screen)
 

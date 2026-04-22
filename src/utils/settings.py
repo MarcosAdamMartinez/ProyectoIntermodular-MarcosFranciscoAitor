@@ -2,7 +2,7 @@ import pygame
 import os
 
 # Pantalla
-WIDTH = 920
+WIDTH = 1020
 HEIGHT = 580
 FPS = 60
 

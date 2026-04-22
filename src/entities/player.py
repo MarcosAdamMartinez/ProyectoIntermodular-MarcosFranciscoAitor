@@ -43,11 +43,18 @@ class Player(pygame.sprite.Sprite):
 
         self.pending_level_ups = 0
 
+        self._base_levelup_vol = 0.05
         try:
             self.level_up_sound = pygame.mixer.Sound("assets/sounds/player/level_up.mp3")
-            self.level_up_sound.set_volume(0.05)
+            self.level_up_sound.set_volume(self._base_levelup_vol)
         except:
             self.level_up_sound = None
+
+    def apply_volume_scale(self, factor):
+        if self.level_up_sound:
+            self.level_up_sound.set_volume(self._base_levelup_vol * factor)
+        for weapon in self.weapons:
+            weapon.apply_volume_scale(factor)
 
     def add_weapon(self, weapon_name):
         # Creamos una funcion para poder equipar nuevas armas al inventario de nuestro personaje durante la partida

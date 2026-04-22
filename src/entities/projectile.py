@@ -27,10 +27,10 @@ class Projectile(pygame.sprite.Sprite):
         else:
             w_size = (70, 70)
 
-        self.original_image = load_sprite(f"assets/sprites/{stats['type']}.png", w_size, stats["color"])
+        self.original_image = load_sprite(f"assets/sprites/weapons/{stats['type']}.png", w_size, stats["color"])
 
         if self.is_melee:
-            self.original_image = load_sprite(f"assets/sprites/melee.png", w_size, stats["color"])
+            self.original_image = load_sprite(f"assets/sprites/weapons/melee.png", w_size, stats["color"])
             self.base_angle = math.degrees(math.atan2(-direction.y, direction.x))
             self.current_angle = self.base_angle + 45
             self.sweep_speed = -3

@@ -7,7 +7,7 @@ class Exp(pygame.sprite.Sprite):
         super().__init__()
 
         # Cargamos la imagen de la gema o un cuadrado verde si no existe el archivo
-        self.image = load_sprite("assets/sprites/exp.png", (15, 15), GREEN)
+        self.image = load_sprite("assets/sprites/objects/exp.png", (15, 15), GREEN)
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.math.Vector2(pos)
 

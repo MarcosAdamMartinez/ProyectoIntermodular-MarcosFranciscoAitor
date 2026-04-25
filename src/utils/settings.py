@@ -35,7 +35,7 @@ CHARACTERS = {
         "hp": 150,
         "color": BLUE,
         "sprite": "assets/sprites/players/knight.png",
-        "starting_weapon": "espada"  # Eliminamos el "melee": True de aqui
+        "starting_weapon": "espada"
     },
     "mago": {
         "speed": 6,
@@ -62,23 +62,21 @@ WEAPONS = {
 
 # DATOS DE MEJORAS
 UPGRADES = [
-    {"id": "hp_up", "name": "Corazon Fuerte", "desc": "+20 Vida Maxima", "type": "max_hp", "value": 20},
-    {"id": "speed_up", "name": "Botas Ligeras", "desc": "+1 Velocidad de movimiento", "type": "speed", "value": 1},
-    {"id": "dmg_up", "name": "Fuerza Bruta", "desc": "+5 de daño a todas las armas", "type": "damage", "value": 5},
-    {"id": "cd_down", "name": "Manos Rapidas", "desc": "Disparas mas rapido", "type": "cooldown", "value": 0.85},
-    {"id": "magnet_up", "name": "Iman Magico", "desc": "+60 Rango de recogida", "type": "magnet", "value": 60},
-    {"id": "health_up", "name": "Beso de la Diosa", "desc": "+40 Vida", "type": "hp", "value": 40}
+    {"id": "hp_up",      "name": "Corazon Fuerte",  "desc": "+20 Vida Maxima",               "type": "max_hp",  "value": 20},
+    {"id": "speed_up",   "name": "Botas Ligeras",    "desc": "+1 Velocidad de movimiento",    "type": "speed",   "value": 1},
+    {"id": "dmg_up",     "name": "Fuerza Bruta",     "desc": "+5 de daño a todas las armas",  "type": "damage",  "value": 5},
+    {"id": "cd_down",    "name": "Manos Rapidas",    "desc": "Disparas mas rapido",            "type": "cooldown","value": 0.85},
+    {"id": "magnet_up",  "name": "Iman Magico",      "desc": "+60 Rango de recogida",         "type": "magnet",  "value": 60},
+    {"id": "health_up",  "name": "Beso de la Diosa", "desc": "+40 Vida",                      "type": "hp",      "value": 40}
 ]
 
 def load_sprite(path, size, fallback_color, remove_bg=True):
     """Carga una imagen, quita el fondo si se pide, o devuelve un cuadrado si no existe."""
     if os.path.exists(path):
         image = pygame.image.load(path).convert_alpha()
-
         if remove_bg:
             background_color = image.get_at((0, 0))
             image.set_colorkey(background_color)
-
         return pygame.transform.scale(image, size)
     else:
         surf = pygame.Surface(size)

@@ -1,5 +1,9 @@
 {
     "fullscreen": true,
     "fps": true,
-    "volume": 0.073
+    "volume": 0.076,
+    "resolution": [
+        1720,
+        920
+    ]
 }

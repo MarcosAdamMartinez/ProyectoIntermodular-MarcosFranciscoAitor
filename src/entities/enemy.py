@@ -130,12 +130,13 @@ class Enemy(pygame.sprite.Sprite):
 
     def draw_boss_ui(self, screen, camera_offset):
         """Dibuja la healthbar y la flecha indicadora del boss."""
-        from src.utils.settings import WIDTH, HEIGHT
+        W = screen.get_width()
+        H = screen.get_height()
 
         # ── FLECHA INDICADORA cuando el boss está fuera de pantalla ─────────
         if not self.is_on_screen(camera_offset):
-            screen_cx = WIDTH // 2
-            screen_cy = HEIGHT // 2
+            screen_cx = W // 2
+            screen_cy = H // 2
 
             # Posición en pantalla del boss
             bx = self.rect.centerx - camera_offset.x

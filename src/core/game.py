@@ -33,7 +33,6 @@ WORLD_TILE_SPRITES = {
 class CameraGroup(pygame.sprite.Group):
     def __init__(self, world=1):
         super().__init__()
-        self.display_surface = pygame.display.get_surface()
         self.offset = pygame.math.Vector2()
         self.world = world
         self.tile_size = 256
@@ -47,25 +46,29 @@ class CameraGroup(pygame.sprite.Group):
             pygame.draw.rect(self.ground_surface, border_color, self.ground_surface.get_rect(), 4)
 
     def custom_draw(self, player):
-        self.offset.x = player.rect.centerx - WIDTH // 2
-        self.offset.y = player.rect.centery - HEIGHT // 2
+        display_surface = pygame.display.get_surface()
+        W = display_surface.get_width()
+        H = display_surface.get_height()
 
-        self.display_surface.fill(BLACK)
+        self.offset.x = player.rect.centerx - W // 2
+        self.offset.y = player.rect.centery - H // 2
+
+        display_surface.fill(BLACK)
 
         start_x = int(self.offset.x // self.tile_size)
         start_y = int(self.offset.y // self.tile_size)
-        tiles_in_x = (WIDTH // self.tile_size) + 2
-        tiles_in_y = (HEIGHT // self.tile_size) + 2
+        tiles_in_x = (W // self.tile_size) + 2
+        tiles_in_y = (H // self.tile_size) + 2
 
         for col in range(start_x, start_x + tiles_in_x):
             for row in range(start_y, start_y + tiles_in_y):
                 x = col * self.tile_size
                 y = row * self.tile_size
-                self.display_surface.blit(self.ground_surface, (x - self.offset.x, y - self.offset.y))
+                display_surface.blit(self.ground_surface, (x - self.offset.x, y - self.offset.y))
 
         for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):
             offset_pos = sprite.rect.topleft - self.offset
-            self.display_surface.blit(sprite.image, offset_pos)
+            display_surface.blit(sprite.image, offset_pos)
 
 
 class GameSession:
@@ -447,6 +450,8 @@ class GameSession:
         self.draw_ui(screen)
 
     def draw_ui(self, screen):
+        W = screen.get_width()
+        H = screen.get_height()
         bar_width  = 200
         bar_height = 20
         x, y = 20, 20
@@ -483,14 +488,14 @@ class GameSession:
         font_world  = pygame.font.SysFont("Arial", 26, bold=True)
         world_text  = font_world.render(world_name, True, world_color)
         shadow_text = font_world.render(world_name, True, (0, 0, 0))
-        world_rect  = world_text.get_rect(midtop=(WIDTH // 2, 10))
+        world_rect  = world_text.get_rect(midtop=(W // 2, 10))
         screen.blit(shadow_text, (world_rect.x + 2, world_rect.y + 2))
         screen.blit(world_text,  world_rect)
 
         # Score
         font_score = pygame.font.SysFont("Arial", 20, bold=True)
         txt_score  = font_score.render(f"Score: {self.score}", True, WHITE)
-        screen.blit(txt_score, txt_score.get_rect(topright=(WIDTH - 20, 20)))
+        screen.blit(txt_score, txt_score.get_rect(topright=(W - 20, 20)))
 
         # Aviso de portal activo
         if self.portals and self.boss_defeated:
@@ -498,4 +503,4 @@ class GameSession:
             alpha = int(abs(pygame.time.get_ticks() % 1200 - 600) / 600 * 255)
             msg = font_portal.render("¡Portal activo! Entra para continuar al siguiente mundo", True, (200, 150, 255))
             msg.set_alpha(alpha)
-            screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+            screen.blit(msg, msg.get_rect(center=(W // 2, H - 40)))

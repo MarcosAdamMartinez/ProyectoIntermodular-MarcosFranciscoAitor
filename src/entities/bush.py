@@ -2,18 +2,29 @@ import pygame
 import random
 from src.utils.settings import load_sprite
 
+# Sprite y color de fallback por mundo (un solo tipo de arbusto/árbol por mundo)
+BUSH_SPRITES = {
+    1: ("assets/sprites/objects/bush.png",    (34, 139,  34)),   # Verde bosque
+    2: ("assets/sprites/objects/bush_w2.png", (60, 100, 160)),   # Azul ártico / cristal
+    3: ("assets/sprites/objects/bush_w3.png", (100,  20,   0)),  # Rojo infernal
+}
+
 
 class Bush(pygame.sprite.Sprite):
-    def __init__(self, pos):
+    def __init__(self, pos, world=1):
         super().__init__()
 
-        # Le damos un tamaño aleatorio para generar variedad visual
         size = random.randint(70, 120)
 
-        # Cargamos el sprite (o un cuadrado verde oscuro si falta el archivo)
-        self.image = load_sprite("assets/sprites/objects/bush.png", (size + 40, size), (34, 139, 34))
-
-        # Le aplicamos una rotación aleatoria de 0 a 360 grados para que parezcan diferentes plantas
+        sprite_path, fallback_color = BUSH_SPRITES.get(world, BUSH_SPRITES[1])
+        self.image = load_sprite(sprite_path, (size + 40, size), fallback_color)
 
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.math.Vector2(pos)
+
+        # Colisión en la parte baja del tronco: franja estrecha en el tercio inferior
+        trunk_w = int((size + 40) * 0.18)   # tronco estrecho
+        trunk_h = int(size * 0.22)           # solo el tercio inferior
+        self.hit_rect = pygame.Rect(0, 0, trunk_w, trunk_h)
+        # Lo centramos horizontalmente y lo anclamos al borde inferior del sprite
+        self.hit_rect.midbottom = self.rect.midbottom

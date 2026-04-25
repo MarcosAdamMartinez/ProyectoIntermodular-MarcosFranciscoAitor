@@ -17,7 +17,6 @@ class Projectile(pygame.sprite.Sprite):
         self.damage = stats["damage"]
         self.direction = direction
 
-        # --- NUEVO: Guardamos la posicion exacta desde donde se lanzo ---
         self.origin_pos = pygame.math.Vector2(pos)
 
         if self.is_melee:
@@ -35,7 +34,6 @@ class Projectile(pygame.sprite.Sprite):
             self.current_angle = self.base_angle + 45
             self.sweep_speed = -3
             self.distance = 45
-
             self._update_melee_pos()
         else:
             angle = math.degrees(math.atan2(-direction.y, direction.x))
@@ -64,7 +62,6 @@ class Projectile(pygame.sprite.Sprite):
                 if self.lifetime <= 0:
                     self.returning = True
             else:
-                # --- NUEVO: Volvemos al origen, no al jugador ---
                 return_dir = self.origin_pos - self.pos
                 if return_dir.length() < self.speed + 10:
                     self.kill()

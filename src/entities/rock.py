@@ -2,36 +2,42 @@ import pygame
 import random
 from src.utils.settings import load_sprite
 
+# Sprites y colores de fallback por mundo (3 variantes cada uno)
+ROCK_SPRITES = {
+    1: {
+        1: ("assets/sprites/objects/rock1.png",       (120, 110, 100)),
+        2: ("assets/sprites/objects/rock2.png",       (90,  90,  95)),
+        3: ("assets/sprites/objects/rock3.png",       (100, 85,  75)),
+    },
+    2: {
+        1: ("assets/sprites/objects/rock_w2_1.png",   (60,  80, 130)),
+        2: ("assets/sprites/objects/rock_w2_2.png",   (80, 100, 150)),
+        3: ("assets/sprites/objects/rock_w2_3.png",   (50,  60, 110)),
+    },
+    3: {
+        1: ("assets/sprites/objects/rock_w3_1.png",   (140,  30,  10)),
+        2: ("assets/sprites/objects/rock_w3_2.png",   (110,  20,   0)),
+        3: ("assets/sprites/objects/rock_w3_3.png",   (160,  60,  10)),
+    },
+}
+
 
 class Rock(pygame.sprite.Sprite):
-    def __init__(self, pos):
+    def __init__(self, pos, world=1):
         super().__init__()
 
-        # Elegimos aleatoriamente uno de los 3 sprites de roca
         rock_variant = random.randint(1, 3)
 
-        # Tamaño aleatorio para variedad visual (un poco más grandes que los arbustos)
         size = random.randint(65, 115)
         w = size
-        h = int(size * 0.75)  # Las rocas suelen ser más anchas que altas
+        h = int(size * 0.75)
 
-        # Color de fallback distinto por variante si no existe el sprite
-        fallback_colors = {
-            1: (120, 110, 100),  # Gris cálido
-            2: (90,  90,  95),   # Gris azulado
-            3: (100, 85,  75),   # Gris marrón
-        }
+        world_rocks = ROCK_SPRITES.get(world, ROCK_SPRITES[1])
+        sprite_path, fallback_color = world_rocks[rock_variant]
 
-        self.image = load_sprite(
-            f"assets/sprites/objects/rock{rock_variant}.png",
-            (w, h),
-            fallback_colors[rock_variant]
-        )
+        self.image = load_sprite(sprite_path, (w, h), fallback_color)
 
-        # --- COLISIÓN AJUSTADA A LA IMAGEN ---
-        # hit_rect es un rectángulo reducido (60% ancho, 55% alto) centrado
-        # en la parte inferior de la imagen, donde está la "base" visual de la roca.
-        # Esto evita la barrera invisible en los bordes superiores y laterales.
+        # hit_rect reducido centrado en la base visual de la roca
         hx = int(w * 0.60)
         hy = int(h * 0.55)
         self.hit_rect = pygame.Rect(0, 0, hx, hy)

@@ -111,7 +111,7 @@ class Engine:
             except Exception as e:
                 print(f"Error pidiendo scores: {e}")
 
-    def _vol(self, base):
+    def vol(self, base):
         """Escala logarítmica: 100% = base original, 0% = silencio total.
         Así incluso el 10%-20% sigue siendo claramente audible."""
         import math
@@ -124,9 +124,9 @@ class Engine:
         """Aplica el volumen actual a la música y a todos los efectos de sonido."""
         import math
         if self.state == "PLAYING":
-            pygame.mixer.music.set_volume(self._vol(0.01))
+            pygame.mixer.music.set_volume(self.vol(0.01))
         else:
-            pygame.mixer.music.set_volume(self._vol(0.04))
+            pygame.mixer.music.set_volume(self.vol(0.04))
         # Propagar a efectos de sonido si hay partida activa
         if hasattr(self, 'game'):
             factor = math.log10(1 + 9 * self.volume) / math.log10(10) if self.volume > 0 else 0.0
@@ -139,7 +139,7 @@ class Engine:
             try:
                 pygame.mixer.music.load("assets/sounds/music_menu.mp3")
                 pygame.mixer.music.play(-1)
-                pygame.mixer.music.set_volume(self._vol(0.04))
+                pygame.mixer.music.set_volume(self.vol(0.04))
                 self.music_state = "MENU"
             except:
                 print("No se encontro assets/sounds/music_menu.mp3")
@@ -225,7 +225,7 @@ class Engine:
                     pygame.quit()
                     sys.exit()
 
-    def _save_settings(self):
+    def save_settings(self):
         """Guarda todas las opciones en settings.json."""
         try:
             with open("settings.json", "r", encoding='utf-8') as f:
@@ -320,7 +320,7 @@ class Engine:
 
                 elif btn_fs.collidepoint(mouse_pos):
                     self.fullscreen = not self.fullscreen
-                    self._save_settings()
+                    self.save_settings()
                     if self.fullscreen:
                         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
                     else:
@@ -328,7 +328,7 @@ class Engine:
 
                 elif btn_fps.collidepoint(mouse_pos):
                     self.show_fps = not self.show_fps
-                    self._save_settings()
+                    self.save_settings()
 
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = self.menu_anterior
@@ -336,7 +336,7 @@ class Engine:
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 if self.dragging_volume:
                     self.dragging_volume = False
-                    self._save_settings()
+                    self.save_settings()
 
             if event.type == pygame.MOUSEMOTION:
                 if self.dragging_volume:
@@ -452,7 +452,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "34.243.10.36"
+                    host = "18.203.172.174"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -619,7 +619,7 @@ class Engine:
                     self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
-                    host = "34.243.10.36"
+                    host = "18.203.172.174"
                     post = 6667
                     try:
                         self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -963,6 +963,8 @@ class Engine:
                 if event.key == pygame.K_ESCAPE:
                     self.state = "PAUSE_MENU"
                     return
+                elif event.key == pygame.K_k:
+                    self.game.current_phase = 4
 
                     # Pasamos el usuario y el socket al game para que guarde el score si morimos
         estado_juego = self.game.update(self.username_text, self.network_socket)

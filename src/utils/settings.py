@@ -35,6 +35,7 @@ CHARACTERS = {
         "hp": 150,
         "color": BLUE,
         "sprite": "assets/sprites/players/knight.png",
+        "anim_folder": "knight",
         "starting_weapon": "espada"
     },
     "mago": {

@@ -22,9 +22,19 @@ class Bush(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.math.Vector2(pos)
 
-        # Colisión en la parte baja del tronco: franja estrecha en el tercio inferior
-        trunk_w = int((size + 40) * 0.18)   # tronco estrecho
-        trunk_h = int(size * 0.22)           # solo el tercio inferior
+        # Colisión en la parte baja del tronco
+        trunk_w = int((size + 40) * 0.18)
+        trunk_h = int(size * 0.22)
         self.hit_rect = pygame.Rect(0, 0, trunk_w, trunk_h)
-        # Lo centramos horizontalmente y lo anclamos al borde inferior del sprite
-        self.hit_rect.midbottom = self.rect.midbottom
+
+        # --- LA SOLUCIÓN DEFINITIVA ---
+        # get_bounding_rect() encuentra el rectángulo exacto que ocupa el dibujo,
+        # ignorando todito el fondo transparente.
+        bounding_rect = self.image.get_bounding_rect()
+
+        # Trasladamos esa posición visual a las coordenadas reales del mundo
+        visual_centerx = self.rect.left + bounding_rect.centerx
+        visual_bottom = self.rect.top + bounding_rect.bottom
+
+        # Ahora anclamos la colisión a la base REAL del dibujo, no al PNG completo
+        self.hit_rect.midbottom = (visual_centerx, visual_bottom)

@@ -1,6 +1,7 @@
 import pygame
 from src.utils.settings import *
 from src.entities.weapon import Weapon
+from src.utils.animation import AnimationController
 import src.core.engine as engine
 
 
@@ -11,16 +12,24 @@ class Player(pygame.sprite.Sprite):
         stats = CHARACTERS[character_name]
 
         if character_name == "my_uncle":
-            self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 60, PLAYER_SIZE - 10), stats["color"])
+            sprite_size = (PLAYER_SIZE + 60, PLAYER_SIZE - 10)
         else:
-            self.image = load_sprite(stats["sprite"], (PLAYER_SIZE + 30, PLAYER_SIZE), stats["color"])
+            sprite_size = (PLAYER_SIZE + 80, PLAYER_SIZE + 50)
 
-        self.rect = self.image.get_rect(center=(x, y))
-        self.pos = pygame.math.Vector2(x, y)
+        # Imagen estática de fallback (misma lógica de siempre)
+        fallback = load_sprite(stats["sprite"], sprite_size, stats["color"])
 
-        self.speed   = stats["speed"]
-        self.hp      = stats["hp"]
-        self.max_hp  = stats["hp"]
+        # ── Sistema de animación ─────────────────────────────────────────────
+        anim_base = f"assets/sprites/players/{stats.get('anim_folder', character_name)}"
+        self._anim = AnimationController(anim_base, sprite_size, fallback, fps=8)
+
+        self.image = self._anim.update()
+        self.rect  = self.image.get_rect(center=(x, y))
+        self.pos   = pygame.math.Vector2(x, y)
+
+        self.speed  = stats["speed"]
+        self.hp     = stats["hp"]
+        self.max_hp = stats["hp"]
 
         self.weapons      = []
         self.sprite_group = sprite_group
@@ -42,6 +51,8 @@ class Player(pygame.sprite.Sprite):
         except:
             self.level_up_sound = None
 
+    # ------------------------------------------------------------------ #
+
     def apply_volume_scale(self, factor):
         if self.level_up_sound:
             self.level_up_sound.set_volume(self._base_levelup_vol * factor)
@@ -60,17 +71,32 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_a]: input_vector.x -= 1
         if keys[pygame.K_d]: input_vector.x += 1
 
-        if input_vector.length() > 0:
+        moving = input_vector.length() > 0
+
+        if moving:
             input_vector = input_vector.normalize()
+            # Elegir dirección horizontal para la animación
+            if input_vector.x >= 0:
+                self._anim.set_state("walk_right")
+            else:
+                self._anim.set_state("walk_left")
+        else:
+            self._anim.set_state("idle")
 
         self.pos += input_vector * self.speed
         self.rect.center = self.pos
+
+        # Actualizar frame de animación
+        center = self.rect.center
+        self.image = self._anim.update()
+        self.rect  = self.image.get_rect(center=center)
 
         for weapon in self.weapons:
             weapon.update(enemies, self.sprite_group, self.proj_group)
 
     def take_damage(self, amount):
         self.hp -= amount
+        self._anim.trigger_hurt()   # dispara animación de hurt si existe
         if self.hp <= 0:
             print("¡Has muerto!")
 

@@ -18,7 +18,7 @@ ROCK_SPRITES = {
         1: ("assets/sprites/objects/rock_w3_1.png",   (140,  30,  10)),
         2: ("assets/sprites/objects/rock_w3_2.png",   (110,  20,   0)),
         3: ("assets/sprites/objects/rock_w3_3.png",   (160,  60,  10)),
-    },
+    }
 }
 
 
@@ -41,7 +41,8 @@ class Rock(pygame.sprite.Sprite):
         hx = int(w * 0.60)
         hy = int(h * 0.55)
         self.hit_rect = pygame.Rect(0, 0, hx, hy)
-        self.hit_rect.center = (int(pos[0]), int(pos[1]) + h // 6)
+
+        self.hit_rect.center = (int(pos[0]), int(pos[1]) + h // 25)
 
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.math.Vector2(pos)

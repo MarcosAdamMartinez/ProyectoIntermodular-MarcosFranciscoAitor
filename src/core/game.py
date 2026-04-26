@@ -66,7 +66,7 @@ class CameraGroup(pygame.sprite.Group):
                 y = row * self.tile_size
                 display_surface.blit(self.ground_surface, (x - self.offset.x, y - self.offset.y))
 
-        for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):
+        for sprite in sorted(self.sprites(), key=lambda sprite: getattr(sprite, 'hit_rect', sprite.rect).centery):
             offset_pos = sprite.rect.topleft - self.offset
             display_surface.blit(sprite.image, offset_pos)
 

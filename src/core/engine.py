@@ -78,7 +78,7 @@ class Engine:
         self._load_assets()
 
         self.network_socket = None
-        self.host = "108.130.127.24"
+        self.host = "34.253.221.107"
 
     # ─────────────────────────────────────────────────────────────────────────
     # HELPERS DE RESOLUCIÓN / VENTANA

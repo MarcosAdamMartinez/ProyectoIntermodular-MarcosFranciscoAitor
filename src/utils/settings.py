@@ -43,6 +43,7 @@ CHARACTERS = {
         "hp": 80,
         "color": (150, 0, 255),
         "sprite": "assets/sprites/players/mage.png",
+        "anim_folder": "mage",
         "starting_weapon": "varita"
     },
     "my_uncle": {
@@ -50,6 +51,7 @@ CHARACTERS = {
         "hp": 100,
         "color": GREY,
         "sprite": "assets/sprites/players/my_uncle.png",
+        "anim_folder": "my_uncle",
         "starting_weapon": "banana"
     }
 }

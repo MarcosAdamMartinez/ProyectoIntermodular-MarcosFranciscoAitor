@@ -199,12 +199,13 @@ class GameSession:
 
         # ── SISTEMA DE FASES Y SPAWN ─────────────────────────────────────────
         # Límite de enemigos por mundo para no explotar el PC
+        # En fase 4 no hay límite: la presión es intencionalmente letal
         enemy_cap = {1: 80, 2: 120, 3: 160}.get(self.world, 80)
 
         self.spawn_timer += 1
         if self.spawn_timer >= self.spawn_rate:
 
-            if len(self.enemies) < enemy_cap:
+            if self.current_phase < 4 and len(self.enemies) < enemy_cap or self.current_phase == 4:
                 enemy_type = self._get_spawn_type()
                 new_enemy = Enemy(target=self.local_player, enemy_type=enemy_type)
                 new_enemy.apply_volume_scale(self._volume_factor)
@@ -246,11 +247,17 @@ class GameSession:
                     self.all_sprites.add(boss)
                     self.boss_spawned = True
 
-                # Post-boss: dificultad creciente muy gradual
-                # Mundo 1→min 6, Mundo 2→min 4, Mundo 3→min 2 (infinito real)
-                min_rate = {1: 6, 2: 4, 3: 2}.get(self.world, 6)
-                if self.spawn_rate > min_rate:
-                    self.spawn_rate -= 0.05   # ~10 min para llegar al mínimo
+                # Fase 4: el spawn baja gradualmente sin límite hasta 1
+                # Primero baja rápido hasta el umbral de fase, luego muy
+                # despacio hacia 1 (un enemigo por tick = presión letal).
+                # El enemy_cap se ignora en fase 4 para que la presión sea real.
+                if self.spawn_rate > 1:
+                    if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
+                        # Tramo inicial: misma velocidad que antes
+                        self.spawn_rate -= 0.05
+                    else:
+                        # Tramo infinito: baja muy despacio (≈3 min para llegar a 1)
+                        self.spawn_rate = max(1, self.spawn_rate - 0.03)
 
         # ── FÍSICAS RÍGIDAS ENTRE ENEMIGOS ───────────────────────────────────
         enemies_list = list(self.enemies)

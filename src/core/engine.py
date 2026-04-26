@@ -615,26 +615,152 @@ class Engine:
     def menu_seleccion_solo(self):
         W, H = self.W, self.H
         self.screen.blit(self.main_menu_bg, (0, 0))
-        overlay = pygame.Surface((W, H), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150))
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA); overlay.fill((0, 0, 0, 160))
         self.screen.blit(overlay, (0, 0))
 
-        font = pygame.font.SysFont("Arial", self._sf(40), bold=True)
-        title = font.render("SELECCIONA TU PERSONAJE", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(150))))
+        mouse_pos = pygame.mouse.get_pos()
 
-        bw, bh = self._sx(500), self._sy(65)
-        btn_knight   = pygame.Rect(W // 2 - bw // 2, H // 2 - self._sy(80),  bw, bh)
-        btn_mage     = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(10),  bw, bh)
-        btn_my_uncle = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(100), bw, bh)
-        btn_volver   = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(200), bw, bh)
+        font_title = pygame.font.SysFont("Arial", self._sf(42), bold=True)
+        font_name  = pygame.font.SysFont("Arial", self._sf(22), bold=True)
+        font_desc  = pygame.font.SysFont("Arial", self._sf(16))
+        font_stat  = pygame.font.SysFont("Arial", self._sf(14))
+        font_back  = pygame.font.SysFont("Arial", self._sf(22), bold=True)
 
-        self.draw_modern_button(btn_knight,   "Caballero (Alta vida)",     font)
-        self.draw_modern_button(btn_mage,     "Mago (Mas rapido)",         font)
-        self.draw_modern_button(btn_my_uncle, "Mi Tio (Lanza Platanos)",   font)
-        self.draw_modern_button(btn_volver,   "Volver Atras",              font)
+        title = font_title.render("SELECCIONA TU PERSONAJE", True, WHITE)
+        self.screen.blit(title, title.get_rect(center=(W // 2, self._sy(70))))
+
+        # ── Datos de personajes ───────────────────────────────────────────────
+        characters = [
+            {
+                "key":   "caballero",
+                "name":  "Caballero",
+                "desc":  "Guerrero resistente con\nalto aguante en combate",
+                "stats": ["Vida: 150", "Vel: 4", "Espada"],
+                "icon":  "assets/sprites/icons/knight_icon.png",
+                "color": (60, 100, 200),
+                "accent": (100, 160, 255),
+            },
+            {
+                "key":   "mago",
+                "name":  "Mago",
+                "desc":  "Veloz lanzador de hechizos\ncon gran movilidad",
+                "stats": ["Vida: 80", "Vel: 6", "Varita"],
+                "icon":  "assets/sprites/icons/mage_icon.png",
+                "color": (100, 30, 180),
+                "accent": (180, 80, 255),
+            },
+            {
+                "key":   "my_uncle",
+                "name":  "Mi Tío",
+                "desc":  "Personaje misterioso que\nlanza plátanos como armas",
+                "stats": ["Vida: 100", "Vel: 5", "Banana"],
+                "icon":  "assets/sprites/icons/my_uncle_icon.png",
+                "color": (120, 90, 30),
+                "accent": (220, 180, 60),
+            },
+        ]
+
+        # ── Layout de tarjetas ────────────────────────────────────────────────
+        n        = len(characters)
+        margin_x = self._sx(60)
+        gap      = self._sx(30)
+        card_w   = (W - margin_x * 2 - gap * (n - 1)) // n
+        card_h   = self._sy(440)
+        cards_y  = self._sy(130)
+
+        card_rects = []
+        for i in range(n):
+            cx = margin_x + i * (card_w + gap)
+            card_rects.append(pygame.Rect(cx, cards_y, card_w, card_h))
+
+        # ── Dibuja cada tarjeta ───────────────────────────────────────────────
+        char_keys = []
+        for i, (char, rect) in enumerate(zip(characters, card_rects)):
+            hovered = rect.collidepoint(mouse_pos)
+            char_keys.append(char["key"])
+
+            # Sombra
+            shadow = rect.move(0, 6)
+            pygame.draw.rect(self.screen, (10, 10, 15), shadow, border_radius=18)
+
+            # Fondo de tarjeta
+            bg_alpha = 230 if hovered else 190
+            card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+            r, g, b = char["color"]
+            card_surf.fill((max(r - 30, 0), max(g - 30, 0), max(b - 30, 0), bg_alpha))
+            self.screen.blit(card_surf, rect.topleft)
+
+            # Borde — más brillante si hover
+            border_color = char["accent"] if hovered else (80, 80, 90)
+            border_w = 3 if hovered else 2
+            pygame.draw.rect(self.screen, border_color, rect, border_w, border_radius=18)
+
+            # Icono / sprite del personaje
+            icon_size = int(min(card_w * 0.55, card_h * 0.38))
+            icon_rect = pygame.Rect(rect.centerx - icon_size // 2,
+                                    rect.y + self._sy(18), icon_size, icon_size)
+
+            import os
+            if os.path.exists(char["icon"]):
+                try:
+                    icon_img = pygame.image.load(char["icon"]).convert_alpha()
+                    bg_col   = icon_img.get_at((0, 0))
+                    icon_img.set_colorkey(bg_col)
+                    icon_img = pygame.transform.scale(icon_img, (icon_size, icon_size))
+                    self.screen.blit(icon_img, icon_rect.topleft)
+                except:
+                    pygame.draw.rect(self.screen, char["accent"], icon_rect, border_radius=12)
+            else:
+                # Placeholder con inicial
+                pygame.draw.rect(self.screen, char["color"], icon_rect, border_radius=12)
+                pygame.draw.rect(self.screen, char["accent"], icon_rect, 2, border_radius=12)
+                ini  = font_title.render(char["name"][0], True, WHITE)
+                self.screen.blit(ini, ini.get_rect(center=icon_rect.center))
+
+            # Nombre
+            text_y = icon_rect.bottom + self._sy(14)
+            name_surf = font_name.render(char["name"], True, WHITE)
+            self.screen.blit(name_surf, name_surf.get_rect(centerx=rect.centerx, y=text_y))
+            text_y += name_surf.get_height() + self._sy(8)
+
+            # Separador
+            sep_x1 = rect.x + self._sx(20)
+            sep_x2 = rect.right - self._sx(20)
+            pygame.draw.line(self.screen, char["accent"], (sep_x1, text_y), (sep_x2, text_y), 1)
+            text_y += self._sy(8)
+
+            # Descripción (multilínea manual)
+            for line in char["desc"].split("\n"):
+                d_surf = font_desc.render(line, True, (200, 200, 220))
+                self.screen.blit(d_surf, d_surf.get_rect(centerx=rect.centerx, y=text_y))
+                text_y += d_surf.get_height() + self._sy(2)
+            text_y += self._sy(10)
+
+            # Stats
+            for stat in char["stats"]:
+                s_surf = font_stat.render(stat, True, char["accent"])
+                self.screen.blit(s_surf, s_surf.get_rect(centerx=rect.centerx, y=text_y))
+                text_y += s_surf.get_height() + self._sy(4)
+
+            # Texto "Seleccionar" al pasar el ratón
+            if hovered:
+                sel_surf = font_stat.render("Seleccionar", True, WHITE)
+                sel_y    = rect.bottom - sel_surf.get_height() - self._sy(14)
+                sel_rect_bg = pygame.Rect(rect.x + self._sx(14), sel_y - self._sy(4),
+                                          card_w - self._sx(28), sel_surf.get_height() + self._sy(8))
+                hl = pygame.Surface((sel_rect_bg.w, sel_rect_bg.h), pygame.SRCALPHA)
+                hl.fill((*char["accent"], 60))
+                self.screen.blit(hl, sel_rect_bg.topleft)
+                self.screen.blit(sel_surf, sel_surf.get_rect(centerx=rect.centerx, y=sel_y))
+
+        # ── Botón volver ──────────────────────────────────────────────────────
+        bw_back  = self._sx(280)
+        bh_back  = self._sy(50)
+        btn_volver = pygame.Rect(W // 2 - bw_back // 2,
+                                 cards_y + card_h + self._sy(22), bw_back, bh_back)
+        self.draw_modern_button(btn_volver, "Volver Atrás", font_back)
 
         btn_settings = self._draw_settings_icon()
-        mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_SELECCION_SOLO"
 
@@ -643,16 +769,19 @@ class Engine:
                 self._quit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 char = None
-                if   btn_knight.collidepoint(mouse_pos):   char = "caballero"
-                elif btn_mage.collidepoint(mouse_pos):     char = "mago"
-                elif btn_my_uncle.collidepoint(mouse_pos): char = "my_uncle"
-                elif btn_volver.collidepoint(mouse_pos):   self.state = "MENU_SELECCION_MODO"
-                elif btn_settings.collidepoint(mouse_pos): self.state = "MENU_SETTINGS"
+                for i, rect in enumerate(card_rects):
+                    if rect.collidepoint(mouse_pos):
+                        char = char_keys[i]
+                        break
                 if char:
                     self.character_name = char
                     self.game = GameSession(character_name=char, multiplayer=False, world=1)
                     self.apply_volume()
                     self.state = "PLAYING"
+                elif btn_volver.collidepoint(mouse_pos):
+                    self.state = "MENU_SELECCION_MODO"
+                elif btn_settings.collidepoint(mouse_pos):
+                    self.state = "MENU_SETTINGS"
 
     # ─────────────────────────────────────────────────────────────────────────
     # MULTIJUGADOR (en desarrollo)
@@ -878,14 +1007,8 @@ class Engine:
         self.game.draw(self.screen)
 
         overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
+        overlay.fill((0, 0, 0, 185))
         self.screen.blit(overlay, (0, 0))
-
-        font_title = pygame.font.SysFont("Arial", self._sf(20), bold=True)
-        font_desc  = pygame.font.SysFont("Arial", self._sf(15))
-
-        title = font_title.render("SUBIDA DE NIVEL!", True, (255, 215, 0))
-        self.screen.blit(title, title.get_rect(center=(W // 2, self._sy(100))))
 
         mouse_pos = pygame.mouse.get_pos()
         clicked   = False
@@ -896,27 +1019,122 @@ class Engine:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 clicked = True
 
-        bw      = self._sx(450)
-        bh      = self._sy(70)
-        spacing = self._sy(30)
-        start_y = self._sy(200)
+        font_title = pygame.font.SysFont("Arial", self._sf(44), bold=True)
+        font_sub   = pygame.font.SysFont("Arial", self._sf(20))
+        font_name  = pygame.font.SysFont("Arial", self._sf(20), bold=True)
+        font_desc  = pygame.font.SysFont("Arial", self._sf(15))
 
+        # Título animado con pulso dorado
+        pulse = abs(pygame.time.get_ticks() % 1000 - 500) / 500
+        gold  = (int(200 + 55 * pulse), int(180 + 35 * pulse), 0)
+        title = font_title.render("¡SUBIDA DE NIVEL!", True, gold)
+        sub   = font_sub.render("Elige una mejora", True, (180, 180, 180))
+        self.screen.blit(title, title.get_rect(center=(W // 2, self._sy(80))))
+        self.screen.blit(sub,   sub.get_rect(center=(W // 2, self._sy(130))))
+
+        # ── Iconos de mejora por tipo ─────────────────────────────────────────
+        UPGRADE_ICONS = {
+            "max_hp":  ("assets/sprites/icons/hp_up.png",     "❤",  (200,  40,  40)),
+            "speed":   ("assets/sprites/icons/speed_up.png",  "⚡", ( 60, 160, 255)),
+            "damage":  ("assets/sprites/icons/dmg_up.png",    "⚔",  (255, 120,  30)),
+            "cooldown":("assets/sprites/icons/cd_down.png",   "🔥", (255, 200,   0)),
+            "magnet":  ("assets/sprites/icons/magnet_up.png", "", (120,  80, 220)),
+            "hp":      ("assets/sprites/icons/heal_up.png",   "", ( 50, 200, 100)),
+        }
+
+        # ── Layout de tarjetas ────────────────────────────────────────────────
+        n        = len(self.current_choices)
+        margin_x = self._sx(80)
+        gap      = self._sx(28)
+        card_w   = (W - margin_x * 2 - gap * (n - 1)) // max(n, 1)
+        card_h   = self._sy(280)
+        cards_y  = H // 2 - card_h // 2 + self._sy(20)
+
+        import os
         for i, upgrade in enumerate(self.current_choices):
-            btn_rect = pygame.Rect(W // 2 - bw // 2, start_y + i * (bh + spacing), bw, bh)
-            color = (100, 100, 100) if btn_rect.collidepoint(mouse_pos) else (70, 70, 70)
+            cx   = margin_x + i * (card_w + gap)
+            rect = pygame.Rect(cx, cards_y, card_w, card_h)
+            hov  = rect.collidepoint(mouse_pos)
 
-            if btn_rect.collidepoint(mouse_pos) and clicked:
+            icon_path, icon_emoji, accent = UPGRADE_ICONS.get(
+                upgrade["type"], ("", "★", (180, 180, 50)))
+
+            # Sombra
+            pygame.draw.rect(self.screen, (8, 8, 12), rect.move(0, 7), border_radius=18)
+
+            # Fondo de tarjeta con gradiente simulado
+            card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+            r, g, b = accent
+            card_surf.fill((max(r - 60, 0), max(g - 60, 0), max(b - 60, 0), 210 if hov else 175))
+            self.screen.blit(card_surf, rect.topleft)
+
+            border_col = accent if hov else (70, 70, 80)
+            border_w   = 3 if hov else 2
+            pygame.draw.rect(self.screen, border_col, rect, border_w, border_radius=18)
+
+            # Brillo superior al hacer hover
+            if hov:
+                glow = pygame.Surface((card_w, self._sy(4)), pygame.SRCALPHA)
+                glow.fill((*accent, 160))
+                self.screen.blit(glow, (rect.x, rect.y + border_w))
+
+            # Icono de mejora
+            icon_size = int(min(card_w * 0.38, card_h * 0.30))
+            icon_y    = rect.y + self._sy(22)
+            icon_rect = pygame.Rect(rect.centerx - icon_size // 2, icon_y, icon_size, icon_size)
+
+            icon_loaded = False
+            if icon_path and os.path.exists(icon_path):
+                try:
+                    ic = pygame.image.load(icon_path).convert_alpha()
+                    ic = pygame.transform.scale(ic, (icon_size, icon_size))
+                    self.screen.blit(ic, icon_rect.topleft)
+                    icon_loaded = True
+                except:
+                    pass
+
+            if not icon_loaded:
+                # Círculo de fondo + emoji/símbolo
+                pygame.draw.circle(self.screen, accent,
+                                   icon_rect.center, icon_size // 2)
+                pygame.draw.circle(self.screen, (255, 255, 255),
+                                   icon_rect.center, icon_size // 2, 2)
+                ico_font = pygame.font.SysFont("Segoe UI Emoji", int(icon_size * 0.52))
+                ico_surf = ico_font.render(icon_emoji, True, WHITE)
+                self.screen.blit(ico_surf, ico_surf.get_rect(center=icon_rect.center))
+
+            # Nombre de la mejora
+            text_y = icon_rect.bottom + self._sy(12)
+            name_surf = font_name.render(upgrade["name"], True, WHITE)
+            self.screen.blit(name_surf, name_surf.get_rect(centerx=rect.centerx, y=text_y))
+            text_y += name_surf.get_height() + self._sy(6)
+
+            # Separador
+            pygame.draw.line(self.screen, accent,
+                             (rect.x + self._sx(18), text_y),
+                             (rect.right - self._sx(18), text_y), 1)
+            text_y += self._sy(8)
+
+            # Descripción
+            desc_surf = font_desc.render(upgrade["desc"], True, (210, 210, 230))
+            self.screen.blit(desc_surf, desc_surf.get_rect(centerx=rect.centerx, y=text_y))
+
+            # Label hover al fondo
+            if hov:
+                pick_font = pygame.font.SysFont("Arial", self._sf(14), bold=True)
+                pick_surf = pick_font.render("Elegir", True, WHITE)
+                pick_y    = rect.bottom - pick_surf.get_height() - self._sy(12)
+                hl        = pygame.Surface((card_w - self._sx(28),
+                                            pick_surf.get_height() + self._sy(8)), pygame.SRCALPHA)
+                hl.fill((*accent, 70))
+                self.screen.blit(hl, (rect.x + self._sx(14), pick_y - self._sy(4)))
+                self.screen.blit(pick_surf, pick_surf.get_rect(centerx=rect.centerx, y=pick_y))
+
+            if hov and clicked:
                 self.game.local_player.apply_upgrade(upgrade)
                 self.state = "PLAYING"
+                pygame.display.flip()
                 return
-
-            pygame.draw.rect(self.screen, color,         btn_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (155, 215, 0), btn_rect, 2, border_radius=10)
-
-            name_txt = font_title.render(upgrade["name"], True, (255, 255, 255))
-            desc_txt = font_desc.render(upgrade["desc"],  True, (200, 200, 200))
-            self.screen.blit(name_txt, (btn_rect.x + 20, btn_rect.y + 15))
-            self.screen.blit(desc_txt, (btn_rect.x + 20, btn_rect.y + name_txt.get_height() + 15))
 
         pygame.display.flip()
 

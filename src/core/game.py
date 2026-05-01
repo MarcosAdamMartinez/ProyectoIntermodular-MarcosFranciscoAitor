@@ -413,9 +413,9 @@ class GameSession:
     # ─────────────────────────────────────────────────────────────────────────
     def on_enemy_killed(self, enemy):
         xp_table = {
-            "zombie":      10,
+            "zombie":      30,
             "slime":        8,
-            "goblin":      30,
+            "goblin":      10,
             "golem":       60,
             "skeleton":    75,
             "bat":         20,

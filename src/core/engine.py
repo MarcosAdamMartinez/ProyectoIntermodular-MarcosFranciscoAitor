@@ -80,6 +80,10 @@ class Engine:
         self.network_socket = None
         self.host = "34.242.27.170"
 
+        # ── MODO OFFLINE ────────────────────────────────────────────────────
+        self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
+        self.offline_max_score = 0     # Puntuación máxima guardada en offline.json
+
     # ─────────────────────────────────────────────────────────────────────────
     # HELPERS DE RESOLUCIÓN / VENTANA
     # ─────────────────────────────────────────────────────────────────────────
@@ -203,7 +207,80 @@ class Engine:
             pass
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BUCLE PRINCIPAL
+    # OFFLINE JSON
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _load_offline(self):
+        """Lee offline.json y devuelve el dict, o {} si no existe."""
+        try:
+            with open("offline.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+
+    def _save_offline(self, username, password, max_score):
+        """Escribe offline.json con los datos actuales."""
+        try:
+            with open("offline.json", "w", encoding="utf-8") as f:
+                json.dump({"username": username, "password": password,
+                           "max_score": max_score}, f, indent=4)
+        except:
+            pass
+
+    def _sync_offline_to_server(self):
+        """
+        Si existe offline.json, intenta subir los datos al servidor.
+        - Si el usuario no existe → lo registra con su puntuación.
+        - Si la contraseña no coincide → no hace nada.
+        - Si todito ok → sube la puntuación y borra offline.json.
+        """
+        datos = self._load_offline()
+        if not datos:
+            return
+
+        user      = datos.get("username", "")
+        password  = datos.get("password", "")
+        score     = datos.get("max_score", 0)
+
+        if not user or not password:
+            return
+
+        port = 6667
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((self.host, port))
+            # Comando especial de sincronización offline
+            sock.sendall(f"offline_sync:{user}:{password}:{score}\n".encode())
+            resp = sock.recv(1024).decode().strip()
+            sock.close()
+            if resp in ("SYNC_OK", "SYNC_REGISTERED"):
+                # Borrar offline.json tras sincronizar
+                import os
+                try:
+                    os.remove("offline.json")
+                except:
+                    pass
+        except:
+            pass   # Sin conexión: se intentará la próxima vez
+
+    def _play_offline(self):
+        """Guarda las credenciales introducidas en offline.json y entra al juego."""
+        user     = self.username_text.strip()
+        password = self.password_text.strip()
+        if not user:
+            self.login_error_msg = "Introduce un nombre de usuario"
+            return
+
+        # Leer puntuación previa si el fichero ya existe para ese usuario
+        datos = self._load_offline()
+        prev_score = datos.get("max_score", 0) if datos.get("username") == user else 0
+
+        self._save_offline(user, password, prev_score)
+        self.offline_max_score = prev_score
+        self.offline_mode      = True
+        self.state             = "MENU_SELECCION_MODO"
+
     # ─────────────────────────────────────────────────────────────────────────
 
     def run(self):
@@ -214,7 +291,6 @@ class Engine:
             elif self.state == "MENU_REGISTER":           self.menu_register_loop()
             elif self.state == "MENU_SELECCION_MODO":     self.menu_seleccion_modo_loop()
             elif self.state == "MENU_SELECCION_SOLO":     self.menu_seleccion_solo()
-            elif self.state == "MENU_SELECCION_MULTIPLAYER": self.menu_seleccion_multiplayer()
             elif self.state == "MENU_SELECCION_SCORE":    self.menu_score_loop()
             elif self.state == "MENU_SETTINGS":           self.menu_settings_loop()
             elif self.state == "PAUSE_MENU":              self.pause_menu_loop()
@@ -232,11 +308,13 @@ class Engine:
 
         font     = pygame.font.SysFont("Arial", self._sf(40), bold=True)
         title    = font.render("Punternows Salvation: The Last Chance", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(100))))
+        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(130))))
 
-        bw, bh   = self._sx(450), self._sy(70)
-        btn_play = pygame.Rect(W // 2 - bw // 2, H // 2 - self._sy(20),  bw, bh)
-        btn_esc  = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(70),  bw, bh)
+        bw, bh   = self._sx(450), self._sy(65)
+        gap      = self._sy(22)
+        start_y  = H // 2 - self._sy(20)
+        btn_play = pygame.Rect(W // 2 - bw // 2, start_y,          bw, bh)
+        btn_esc  = pygame.Rect(W // 2 - bw // 2, start_y + bh + gap, bw, bh)
 
         self.draw_modern_button(btn_play, "Jugar",              font)
         self.draw_modern_button(btn_esc,  "Salir al Escritorio", font)
@@ -417,15 +495,19 @@ class Engine:
         font_small = pygame.font.SysFont("Arial", self._sf(20), bold=True)
 
         title = font_title.render("INICIO DE SESION", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(150))))
+        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(190))))
 
-        iw, ih = self._sx(400), self._sy(50)
-        bw, bh = self._sx(450), self._sy(60)
+        iw, ih = self._sx(460), self._sy(52)
+        bw, bh = self._sx(460), self._sy(58)
+        gap    = self._sy(18)
+        cx     = W // 2
 
-        user_rect = pygame.Rect(W // 2 - iw // 2, H // 2 - self._sy(70),  iw, ih)
-        pass_rect = pygame.Rect(W // 2 - iw // 2, H // 2 + self._sy(10),  iw, ih)
-        btn_log   = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(120), bw, bh)
-        btn_volver= pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(200), bw, bh)
+        # Ancla: inputs centrados en H//2 - algo, luego botones debajo con gap uniforme
+        user_rect   = pygame.Rect(cx - iw // 2, H // 2 - self._sy(95), iw, ih)
+        pass_rect   = pygame.Rect(cx - iw // 2, user_rect.bottom + gap, iw, ih)
+        btn_log     = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28), bw, bh)
+        btn_offline = pygame.Rect(cx - bw // 2, btn_log.bottom    + gap,         bw, bh)
+        btn_volver  = pygame.Rect(cx - bw // 2, btn_offline.bottom + gap,        bw, bh)
 
         color_active   = (50, 150, 255)
         color_inactive = (95, 99, 104)
@@ -444,8 +526,9 @@ class Engine:
         self.screen.blit(txt_user, (user_rect.x + 15, user_rect.y + 10))
         self.screen.blit(txt_pass, (pass_rect.x + 15, pass_rect.y + 10))
 
-        self.draw_modern_button(btn_log,    "INICIAR SESION", font_title)
-        self.draw_modern_button(btn_volver, "VOLVER ATRAS",   font_title)
+        self.draw_modern_button(btn_log,     "INICIAR SESION",      font_title)
+        self.draw_modern_button(btn_offline, "JUGAR SIN CONEXION",  font_title, (40, 100, 40))
+        self.draw_modern_button(btn_volver,  "VOLVER ATRAS",        font_title)
 
         txt_no_acc = font_small.render("¿No tienes cuenta?", True, WHITE)
         self.screen.blit(txt_no_acc, (self._sx(30), H - self._sy(110)))
@@ -453,15 +536,14 @@ class Engine:
         self.draw_modern_button(btn_go_register, "Ir a Registro", font_small)
 
         if self.login_error_msg:
-            font_error = pygame.font.SysFont("Arial", self._sf(30), bold=True)
-            txt_err = font_error.render(self.login_error_msg, True, (255, 50, 50))
-            mx, my = 10, 5
+            font_error = pygame.font.SysFont("Arial", self._sf(22), bold=True)
+            txt_err = font_error.render(self.login_error_msg, True, (255, 80, 80))
+            mx, my = 12, 6
             bg = pygame.Surface((txt_err.get_width() + mx * 2, txt_err.get_height() + my * 2), pygame.SRCALPHA)
-            bg.fill((0, 0, 0, 150))
-            px = W // 2 - bg.get_width() // 2
-            py = H // 2 + self._sy(65)
-            self.screen.blit(bg, (px, py))
-            self.screen.blit(txt_err, (W // 2 - txt_err.get_width() // 2, H // 2 + self._sy(70)))
+            bg.fill((0, 0, 0, 160))
+            err_y = pass_rect.bottom + self._sy(8)
+            self.screen.blit(bg, (cx - bg.get_width() // 2, err_y))
+            self.screen.blit(txt_err, (cx - txt_err.get_width() // 2, err_y + my))
 
         btn_settings = self._draw_settings_icon()
         mouse_pos = pygame.mouse.get_pos()
@@ -479,6 +561,8 @@ class Engine:
 
                 if btn_log.collidepoint(mouse_pos):
                     self._try_login()
+                elif btn_offline.collidepoint(mouse_pos):
+                    self._play_offline()
                 elif btn_volver.collidepoint(mouse_pos):
                     self._clear_login(); self.state = "MENU_PRINCIPAL"
                 elif btn_go_register.collidepoint(mouse_pos):
@@ -500,15 +584,17 @@ class Engine:
         font_small = pygame.font.SysFont("Arial", self._sf(20), bold=True)
 
         title = font_title.render("REGISTRO DE NUEVO USUARIO", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(150))))
+        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(190))))
 
-        iw, ih = self._sx(400), self._sy(50)
-        bw, bh = self._sx(450), self._sy(60)
+        iw, ih = self._sx(420), self._sy(52)
+        bw, bh = self._sx(420), self._sy(58)
+        gap    = self._sy(18)
+        cx     = W // 2
 
-        user_rect = pygame.Rect(W // 2 - iw // 2, H // 2 - self._sy(70),  iw, ih)
-        pass_rect = pygame.Rect(W // 2 - iw // 2, H // 2 + self._sy(10),  iw, ih)
-        btn_log   = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(120), bw, bh)
-        btn_volver= pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(200), bw, bh)
+        user_rect = pygame.Rect(cx - iw // 2, H // 2 - self._sy(95), iw, ih)
+        pass_rect = pygame.Rect(cx - iw // 2, user_rect.bottom + gap, iw, ih)
+        btn_log   = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28), bw, bh)
+        btn_volver= pygame.Rect(cx - bw // 2, btn_log.bottom   + gap,          bw, bh)
 
         color_active = (50, 150, 255); color_inactive = (95, 99, 104)
         color_user = color_active if self.active_input == "username" else color_inactive
@@ -535,13 +621,14 @@ class Engine:
         self.draw_modern_button(btn_go_login, "Ir a Login", font_small)
 
         if self.login_error_msg:
-            font_error = pygame.font.SysFont("Arial", self._sf(30), bold=True)
-            txt_err = font_error.render(self.login_error_msg, True, (255, 50, 50))
-            mx, my = 10, 5
+            font_error = pygame.font.SysFont("Arial", self._sf(22), bold=True)
+            txt_err = font_error.render(self.login_error_msg, True, (255, 80, 80))
+            mx, my = 12, 6
             bg = pygame.Surface((txt_err.get_width() + mx * 2, txt_err.get_height() + my * 2), pygame.SRCALPHA)
-            bg.fill((0, 0, 0, 150))
-            self.screen.blit(bg, (W // 2 - bg.get_width() // 2, H // 2 + self._sy(65)))
-            self.screen.blit(txt_err, (W // 2 - txt_err.get_width() // 2, H // 2 + self._sy(70)))
+            bg.fill((0, 0, 0, 160))
+            err_y = pass_rect.bottom + self._sy(8)
+            self.screen.blit(bg, (W // 2 - bg.get_width() // 2, err_y))
+            self.screen.blit(txt_err, (W // 2 - txt_err.get_width() // 2, err_y + my))
 
         btn_settings = self._draw_settings_icon()
         mouse_pos = pygame.mouse.get_pos()
@@ -577,16 +664,16 @@ class Engine:
 
         font = pygame.font.SysFont("Arial", self._sf(40), bold=True)
         title = font.render("SELECCIONA UN MODO", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(100))))
+        self.screen.blit(title, title.get_rect(center=(W // 2, H // 2 - self._sy(150))))
 
-        bw, bh = self._sx(470), self._sy(70)
-        btn_solo       = pygame.Rect(W // 2 - bw // 2, H // 2 - self._sy(40),  bw, bh)
-        btn_multi      = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(60),  bw, bh)
-        btn_score      = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(160), bw, bh)
-        btn_menu_princ = pygame.Rect(W // 2 - bw // 2, H // 2 + self._sy(260), bw, bh)
+        bw, bh = self._sx(470), self._sy(65)
+        gap    = self._sy(22)
+        start_y = H // 2 - self._sy(55)
+        btn_solo       = pygame.Rect(W // 2 - bw // 2, start_y,                   bw, bh)
+        btn_score      = pygame.Rect(W // 2 - bw // 2, start_y + (bh + gap),      bw, bh)
+        btn_menu_princ = pygame.Rect(W // 2 - bw // 2, start_y + (bh + gap) * 2,  bw, bh)
 
         self.draw_modern_button(btn_solo,       "Un Jugador",              font)
-        self.draw_modern_button(btn_multi,      "Multijugador",            font)
         self.draw_modern_button(btn_score,      "Tabla de Clasificacion",  font)
         self.draw_modern_button(btn_menu_princ, "Volver al menu principal", font)
 
@@ -600,13 +687,16 @@ class Engine:
                 self._quit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if   btn_solo.collidepoint(mouse_pos):       self.state = "MENU_SELECCION_SOLO"
-                elif btn_multi.collidepoint(mouse_pos):      self.state = "MENU_SELECCION_MULTIPLAYER"
                 elif btn_score.collidepoint(mouse_pos):
                     self.last_basc_time = 0; self.state = "MENU_SELECCION_SCORE"
                 elif btn_settings.collidepoint(mouse_pos):   self.state = "MENU_SETTINGS"
                 elif btn_menu_princ.collidepoint(mouse_pos):
                     self.state = "MENU_PRINCIPAL"
-                    if self.network_socket: self.network_socket.close()
+                    if not self.offline_mode:
+                        self._sync_offline_to_server()
+                    if self.network_socket:
+                        self.network_socket.close()
+                    self.offline_mode = False
 
     # ─────────────────────────────────────────────────────────────────────────
     # SELECCIÓN DE PERSONAJE
@@ -784,46 +874,43 @@ class Engine:
                     self.state = "MENU_SETTINGS"
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MULTIJUGADOR (en desarrollo)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def menu_seleccion_multiplayer(self):
-        W, H = self.W, self.H
-        self.screen.blit(self.main_menu_bg, (0, 0))
-        overlay = pygame.Surface((W, H), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150))
-        self.screen.blit(overlay, (0, 0))
-
-        font = pygame.font.SysFont("Arial", self._sf(40), bold=True)
-        txt  = font.render("ESTAMOS TRABAJANDO EN ELLO", True, WHITE)
-        self.screen.blit(txt, txt.get_rect(center=(W // 2, H // 2 - self._sy(100))))
-
-        bw, bh  = self._sx(450), self._sy(70)
-        btn_vol = pygame.Rect(W // 2 - bw // 2, H // 2 - self._sy(40), bw, bh)
-        self.draw_modern_button(btn_vol, "Volver al menu", font)
-
-        btn_settings = self._draw_settings_icon()
-        mouse_pos = pygame.mouse.get_pos()
-        pygame.display.flip()
-        self.menu_anterior = "MENU_SELECCION_MULTIPLAYER"
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self._quit()
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if   btn_vol.collidepoint(mouse_pos):      self.state = "MENU_SELECCION_MODO"
-                elif btn_settings.collidepoint(mouse_pos): self.state = "MENU_SETTINGS"
-
-    # ─────────────────────────────────────────────────────────────────────────
     # SCOREBOARD
     # ─────────────────────────────────────────────────────────────────────────
+
+    def _fetch_scoreboard_guest(self):
+        """Abre conexión temporal y pide el ranking sin login."""
+        try:
+            tmp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            tmp.settimeout(5)
+            tmp.connect((self.host, 6667))
+            tmp.sendall("basc_guest:\n".encode())
+            data = tmp.recv(4096).decode().strip()
+            tmp.close()
+            if data.startswith("basc"):
+                partes = data.split(":")
+                if len(partes) > 1:
+                    self.scoreboard_data = []
+                    for p in partes[1:]:
+                        if "," in p:
+                            u, s = p.split(",")
+                            self.scoreboard_data.append((u, s))
+            self.last_basc_time = pygame.time.get_ticks()
+        except Exception as e:
+            print(f"Error scoreboard guest: {e}")
 
     def get_scoreboard(self):
         if self.network_socket:
             try:
                 self.network_socket.sendall("basc:u:s\n".encode())
                 self.last_basc_time = pygame.time.get_ticks()
-            except Exception as e:
-                print(f"Error pidiendo scores: {e}")
+            except Exception:
+                # Socket roto (ej. tras sesión online→offline) — limpiar y usar guest
+                try: self.network_socket.close()
+                except: pass
+                self.network_socket = None
+                self._fetch_scoreboard_guest()
+        else:
+            self._fetch_scoreboard_guest()
 
     def menu_score_loop(self):
         W, H = self.W, self.H
@@ -845,8 +932,14 @@ class Engine:
                                 self.scoreboard_data.append((u, s))
             except (BlockingIOError, socket.error):
                 pass
+            except Exception:
+                # Socket roto — limpiar
+                try: self.network_socket.close()
+                except: pass
+                self.network_socket = None
             finally:
-                self.network_socket.setblocking(True)
+                if self.network_socket:
+                    self.network_socket.setblocking(True)
 
         self.screen.blit(self.main_menu_bg, (0, 0))
         overlay = pygame.Surface((W, H), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150))
@@ -911,6 +1004,15 @@ class Engine:
         estado_juego = self.game.update(self.username_text, self.network_socket)
 
         if estado_juego == "GAME_OVER":
+            if self.offline_mode:
+                score_actual = self.game.score
+                if score_actual > self.offline_max_score:
+                    self.offline_max_score = score_actual
+                    datos = self._load_offline()
+                    self._save_offline(
+                        datos.get("username", self.username_text),
+                        datos.get("password", self.password_text),
+                        score_actual)
             self.state = "GAME_OVER"
             return
         elif estado_juego == "LEVEL_UP":
@@ -1034,10 +1136,10 @@ class Engine:
 
         # ── Iconos de mejora por tipo ─────────────────────────────────────────
         UPGRADE_ICONS = {
-            "max_hp":  ("assets/sprites/icons/hp_up.png",     "❤",  (200,  40,  40)),
-            "speed":   ("assets/sprites/icons/speed_up.png",  "⚡", ( 60, 160, 255)),
-            "damage":  ("assets/sprites/icons/dmg_up.png",    "⚔",  (255, 120,  30)),
-            "cooldown":("assets/sprites/icons/cd_down.png",   "🔥", (255, 200,   0)),
+            "max_hp":  ("assets/sprites/icons/hp_up.png",     "",  (200,  40,  40)),
+            "speed":   ("assets/sprites/icons/speed_up.png",  "", ( 60, 160, 255)),
+            "damage":  ("assets/sprites/icons/dmg_up.png",    "",  (255, 120,  30)),
+            "cooldown":("assets/sprites/icons/cd_down.png",   "", (255, 200,   0)),
             "magnet":  ("assets/sprites/icons/magnet_up.png", "", (120,  80, 220)),
             "hp":      ("assets/sprites/icons/heal_up.png",   "", ( 50, 200, 100)),
         }
@@ -1057,7 +1159,7 @@ class Engine:
             hov  = rect.collidepoint(mouse_pos)
 
             icon_path, icon_emoji, accent = UPGRADE_ICONS.get(
-                upgrade["type"], ("", "★", (180, 180, 50)))
+                upgrade["type"], ("", "", (180, 180, 50)))
 
             # Sombra
             pygame.draw.rect(self.screen, (8, 8, 12), rect.move(0, 7), border_radius=18)
@@ -1168,18 +1270,62 @@ class Engine:
 
     def _try_login(self):
         port = 6667
+
+        def _open_socket_and_login():
+            """Abre conexión nueva, manda login, devuelve respuesta. Cierra si falla."""
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(8)
+            sock.connect((self.host, port))
+            sock.sendall(f"l:{self.username_text}:{self.password_text}\n".encode())
+            return sock, sock.recv(1024).decode().strip()
+
         try:
-            self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.network_socket.connect((self.host, port))
-            self.network_socket.sendall(f"l:{self.username_text}:{self.password_text}\n".encode())
-            resp = self.network_socket.recv(1024).decode().strip()
-            if   resp == "ENTRAR":     self.state = "MENU_SELECCION_MODO"
-            elif resp == "INCORRECTO": self.login_error_msg = "Contraseña incorrecta"; self.network_socket.close()
-            elif resp == "INSUFICIENTE": self.login_error_msg = "Faltan datos por completar"; self.network_socket.close()
-            elif resp == "INEXISTENTE":  self.login_error_msg = "No existe el usuario"; self.network_socket.close()
+            # Primer intento de login
+            sock, resp = _open_socket_and_login()
+
+            if resp == "ENTRAR":
+                self.network_socket = sock
+                self.offline_mode = False
+                self._sync_offline_to_server()
+                self.state = "MENU_SELECCION_MODO"
+                return
+
+            # Servidor rechazó: cerrar esta conexión (el servidor ya la cerró por su lado)
+            try: sock.close()
+            except: pass
+
+            if resp == "INCORRECTO":
+                # Kevin puede existir en offline.json pero no en la BD todavía
+                datos_off = self._load_offline()
+                if datos_off.get("username") == self.username_text:
+                    # Sincronizar: registra al usuario en la BD con su puntuación
+                    self._sync_offline_to_server()
+                    # Reintento de login con socket completamente nuevo
+                    try:
+                        sock2, resp2 = _open_socket_and_login()
+                        if resp2 == "ENTRAR":
+                            self.network_socket = sock2
+                            self.offline_mode = False
+                            self.state = "MENU_SELECCION_MODO"
+                        else:
+                            try: sock2.close()
+                            except: pass
+                            self.login_error_msg = "Contraseña incorrecta"
+                    except:
+                        self.login_error_msg = "Error al reconectar tras sincronizar"
+                else:
+                    self.login_error_msg = "Contraseña incorrecta"
+
+            elif resp == "INSUFICIENTE":
+                self.login_error_msg = "Faltan datos por completar"
+            elif resp == "INEXISTENTE":
+                self.login_error_msg = "No existe el usuario"
+            else:
+                self.login_error_msg = "Error desconocido del servidor"
+
         except:
             self.login_error_msg = "Error al conectar con el servidor"
-            if self.network_socket: self.network_socket.close()
+            self.network_socket = None
 
     def _try_register(self):
         port = 6667
@@ -1188,7 +1334,10 @@ class Engine:
             self.network_socket.connect((self.host, port))
             self.network_socket.sendall(f"r:{self.username_text}:{self.password_text}\n".encode())
             resp = self.network_socket.recv(1024).decode().strip()
-            if   resp == "ENTRAR":         self.state = "MENU_SELECCION_MODO"
+            if   resp == "ENTRAR":
+                self.offline_mode = False
+                self._sync_offline_to_server()
+                self.state = "MENU_SELECCION_MODO"
             elif resp == "EXISTENTE":      self.login_error_msg = "El usuario ya existe"; self.network_socket.close()
             elif resp == "INSUFICIENTE":   self.login_error_msg = "Faltan datos por completar"; self.network_socket.close()
             elif resp == "ERROR_SERVIDOR": self.login_error_msg = "Error al registrar el usuario"; self.network_socket.close()

@@ -45,7 +45,7 @@ class Enemy(pygame.sprite.Sprite):
 
         # Posición de spawn circular
         boss_types = {"giga_zombie", "yeti", "minotaur", "boss"}
-        spawn_radius = 500 if enemy_type in boss_types else 400
+        spawn_radius = 1100 if enemy_type in boss_types else 900
         angle = random.uniform(0, 360)
         offset = pygame.math.Vector2(spawn_radius, 0).rotate(angle)
         spawn_pos = target.pos + offset
@@ -55,6 +55,7 @@ class Enemy(pygame.sprite.Sprite):
 
         self.max_hp = self.hp
         self.target = target
+        self._on_screen = True   # se actualiza desde game.py cada frame
 
         # Fuentes cacheadas (SysFont es caro, no crear cada frame)
         self._font_small = pygame.font.SysFont("Arial", 15, bold=True)
@@ -75,25 +76,31 @@ class Enemy(pygame.sprite.Sprite):
             self.hurt_sound.set_volume(self._base_hurt_vol * factor)
 
     def update(self):
-        direction = self.target.pos - self.pos
+        # ── Movimiento ────────────────────────────────────────────────────────
+        dx = self.target.pos.x - self.pos.x
+        dy = self.target.pos.y - self.pos.y
+        dist_sq = dx * dx + dy * dy
 
-        if direction.length() > 0:
-            direction = direction.normalize()
-            self.pos += direction * self.speed
-            self.rect.center = self.pos
+        moving = dist_sq > 1.0
+        if moving:
+            inv = self.speed / (dist_sq ** 0.5)   # normalize + scale en un paso
+            self.pos.x += dx * inv
+            self.pos.y += dy * inv
+            self.rect.centerx = int(self.pos.x)
+            self.rect.centery  = int(self.pos.y)
 
-            # Animación de movimiento según dirección horizontal
-            if direction.x >= 0:
-                self._anim.set_state("walk_right")
+        # ── Animación (solo si está en pantalla) ──────────────────────────────
+        # Los enemigos fuera de cámara solo mueven su posición; no gastan CPU
+        # en decodificar frames ni hacer get_rect.
+        if self._on_screen:
+            if moving:
+                self._anim.set_state("walk_right" if dx >= 0 else "walk_left")
             else:
-                self._anim.set_state("walk_left")
-        else:
-            self._anim.set_state("idle")
-
-        # Actualizar frame
-        center = self.rect.center
-        self.image = self._anim.update()
-        self.rect  = self.image.get_rect(center=center)
+                self._anim.set_state("idle")
+            new_img = self._anim.update()
+            if new_img is not self.image:   # solo reasignar si cambió el frame
+                self.image = new_img
+                self.rect  = self.image.get_rect(center=self.rect.center)
 
     def take_damage(self, amount):
         if self.hurt_sound:

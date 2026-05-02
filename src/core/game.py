@@ -112,8 +112,12 @@ class GameSession:
         self._volume_factor   = 1.0
         self._near_pedestal   = None
         self._pedestal_spawned = False
-        self._obstacles_cache  = []   # lista plana de obstáculos, reconstruida solo al generar chunks
-        self._ui_fonts         = {}   # caché de fuentes para draw_ui
+        self._obstacles_cache  = []
+        self._ui_fonts         = {}
+        self._notifications    = []
+        # Spatial grid para colisión jugador-obstáculos (cell = 256 px)
+        self._obs_cell = 256
+        self._obs_grid: dict = {}   # (cx,cy) -> [hit_rect, ...]
 
         try:
             pygame.mixer.music.load("assets/sounds/music_game.mp3")
@@ -124,6 +128,53 @@ class GameSession:
         except:
             print("Faltan archivos de audio en assets/sounds/")
             self.player_hurt_sound = None
+
+        # Pre-generar chunks en radio 3 para que arbustos y rocas ya existan
+        # al empezar sin que popeen en pantalla (se hace una sola vez aquí)
+        self._pre_generate_chunks(radius=3)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    def _add_to_obs_grid(self, hit_rect):
+        """Inserta un hit_rect en el spatial grid de obstáculos."""
+        cell = self._obs_cell
+        cx_ = int(hit_rect.centerx // cell)
+        cy_ = int(hit_rect.centery // cell)
+        self._obs_grid.setdefault((cx_, cy_), []).append(hit_rect)
+
+    def _generate_chunk(self, i, j, chunk_size=512):
+        """Genera el contenido de un chunk y lo añade a los grupos y al grid."""
+        if random.random() < 0.6:
+            for _ in range(random.randint(1, 4)):
+                bx = i * chunk_size + random.randint(0, chunk_size)
+                by = j * chunk_size + random.randint(0, chunk_size)
+                new_bush = Bush((bx, by), world=self.world)
+                self.all_sprites.add(new_bush)
+                self.bushes.add(new_bush)
+                hit = getattr(new_bush, 'hit_rect', new_bush.rect)
+                self._add_to_obs_grid(hit)
+
+        if random.random() < 0.20:
+            for _ in range(random.randint(1, 2)):
+                rx = i * chunk_size + random.randint(0, chunk_size)
+                ry = j * chunk_size + random.randint(0, chunk_size)
+                new_rock = Rock((rx, ry), world=self.world)
+                self.rocks.add(new_rock)
+                self.all_sprites.add(new_rock)
+                hit = getattr(new_rock, 'hit_rect', new_rock.rect)
+                self._add_to_obs_grid(hit)
+
+    def _pre_generate_chunks(self, radius=3):
+        """Pre-genera chunks en un radio dado al iniciar la sesión (off-screen buffer)."""
+        chunk_size = 512
+        # Centro del mapa = posición inicial del jugador en chunks
+        cx0 = int(self.local_player.pos.x // chunk_size)
+        cy0 = int(self.local_player.pos.y // chunk_size)
+        for i in range(cx0 - radius, cx0 + radius + 1):
+            for j in range(cy0 - radius, cy0 + radius + 1):
+                if (i, j) not in self.generated_chunks:
+                    self.generated_chunks.add((i, j))
+                    self._generate_chunk(i, j, chunk_size)
+        self._obstacles_cache = list(self.rocks) + list(self.bushes) + list(self.pedestals)
 
     # ─────────────────────────────────────────────────────────────────────────
     def _spawn_pedestal_guaranteed(self):
@@ -144,6 +195,14 @@ class GameSession:
         self.all_sprites.add(new_pedestal)
         self._pedestal_spawned = True
         self._obstacles_cache  = list(self.rocks) + list(self.bushes) + list(self.pedestals)
+        self._add_to_obs_grid(new_pedestal.hit_rect)
+        boss_name = PEDESTAL_BOSS_NAMES.get(self.world, "Boss")
+        self._notifications.append({
+            "text":      f"¡Ha aparecido el Altar de Invocación! Búscalo para despertar a {boss_name}",
+            "color":     {1: (120, 255, 120), 2: (120, 180, 255), 3: (255, 120, 60)}.get(self.world, (255, 220, 80)),
+            "timer":     0,
+            "max_timer": 360,   # 6 segundos a 60 fps
+        })
         print(f"[Pedestal] Spawneado en {spawn_pos} (distancia {distance:.0f} px, ángulo {angle:.0f}°)")
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -177,6 +236,17 @@ class GameSession:
         self.update_singleplayer()
         self.projectiles.update()
         self.exp.update()
+
+        # Marcar enemigos en/fuera de pantalla antes de actualizar
+        # (una sola comparación rect por enemigo — muy barato)
+        W = pygame.display.get_surface().get_width()
+        H = pygame.display.get_surface().get_height()
+        cam_x = self.local_player.rect.centerx - W // 2
+        cam_y = self.local_player.rect.centery - H // 2
+        screen_rect = pygame.Rect(cam_x - 200, cam_y - 200, W + 400, H + 400)
+        for enemy in self.enemies:
+            enemy._on_screen = screen_rect.colliderect(enemy.rect)
+
         self.enemies.update()
         self.portals.update()
         self.pedestals.update()
@@ -212,22 +282,7 @@ class GameSession:
                 if (i, j) not in self.generated_chunks:
                     self.generated_chunks.add((i, j))
                     new_chunk_added = True
-
-                    if random.random() < 0.6:
-                        for _ in range(random.randint(1, 4)):
-                            bx = i * chunk_size + random.randint(0, chunk_size)
-                            by = j * chunk_size + random.randint(0, chunk_size)
-                            new_bush = Bush((bx, by), world=self.world)
-                            self.all_sprites.add(new_bush)
-                            self.bushes.add(new_bush)
-
-                    if random.random() < 0.20:
-                        for _ in range(random.randint(1, 2)):
-                            rx = i * chunk_size + random.randint(0, chunk_size)
-                            ry = j * chunk_size + random.randint(0, chunk_size)
-                            new_rock = Rock((rx, ry), world=self.world)
-                            self.rocks.add(new_rock)
-                            self.all_sprites.add(new_rock)
+                    self._generate_chunk(i, j, chunk_size)
 
         if new_chunk_added:
             self._obstacles_cache = list(self.rocks) + list(self.bushes) + list(self.pedestals)
@@ -240,14 +295,13 @@ class GameSession:
             self.survival_timer = 0
 
         # ── SISTEMA DE FASES Y SPAWN ─────────────────────────────────────────
-        # Límite de enemigos por mundo para no explotar el PC
-        # En fase 4 no hay límite: la presión es intencionalmente letal
-        enemy_cap = {1: 80, 2: 120, 3: 160}.get(self.world, 80)
+        # Maximo numero de enemigos
+        HARD_CAP = {1: 200, 2: 200, 3: 200}.get(self.world, 80)
 
         self.spawn_timer += 1
         if self.spawn_timer >= self.spawn_rate:
 
-            if self.current_phase < 4 and len(self.enemies) < enemy_cap or self.current_phase == 4:
+            if len(self.enemies) < HARD_CAP:
                 enemy_type = self._get_spawn_type()
                 new_enemy = Enemy(target=self.local_player, enemy_type=enemy_type)
                 new_enemy.apply_volume_scale(self._volume_factor)
@@ -280,7 +334,6 @@ class GameSession:
                 else:
                     self.current_phase = 4
 
-                # Spawn del pedestal al llegar a fase 3 (una sola vez)
                 if not self._pedestal_spawned:
                     self._spawn_pedestal_guaranteed()
 
@@ -363,11 +416,17 @@ class GameSession:
                 self.player_hurt_sound.play()
 
         # ── COLISIÓN JUGADOR VS ROCAS Y ÁRBOLES ──────────────────────────────
+        # Solo el jugador colisiona con obstáculos (los enemigos los atraviesan,
+        # igual que en Vampire Survivors — eliminar ese bucle fue la mayor ganancia).
         player_hitbox = self.local_player.rect.inflate(
             -self.local_player.rect.width  * 0.6,
             -self.local_player.rect.height * 0.6)
-        for obstacle in self._obstacles_cache:
-            hit_rect = getattr(obstacle, 'hit_rect', obstacle.rect)
+        px_c, py_c = int(self.local_player.pos.x // self._obs_cell), int(self.local_player.pos.y // self._obs_cell)
+        nearby_obstacles = []
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                nearby_obstacles.extend(self._obs_grid.get((px_c + di, py_c + dj), []))
+        for hit_rect in nearby_obstacles:
             if not player_hitbox.colliderect(hit_rect):
                 continue
             dx = player_hitbox.centerx - hit_rect.centerx
@@ -383,29 +442,6 @@ class GameSession:
                 player_hitbox = self.local_player.rect.inflate(
                     -self.local_player.rect.width  * 0.6,
                     -self.local_player.rect.height * 0.6)
-
-        # ── COLISIÓN ENEMIGOS VS ROCAS Y ÁRBOLES ─────────────────────────────
-        for enemy in enemies_list:
-            enemy_hitbox = enemy.rect.inflate(
-                -enemy.rect.width  * 0.3,
-                -enemy.rect.height * 0.3)
-            for obstacle in self._obstacles_cache:
-                hit_rect = getattr(obstacle, 'hit_rect', obstacle.rect)
-                if not enemy_hitbox.colliderect(hit_rect):
-                    continue
-                dx = enemy_hitbox.centerx - hit_rect.centerx
-                dy = enemy_hitbox.centery - hit_rect.centery
-                overlap_x = (enemy_hitbox.width  / 2 + hit_rect.width  / 2) - abs(dx)
-                overlap_y = (enemy_hitbox.height / 2 + hit_rect.height / 2) - abs(dy)
-                if overlap_x > 0 and overlap_y > 0:
-                    if overlap_x < overlap_y:
-                        enemy.pos.x += overlap_x if dx > 0 else -overlap_x
-                    else:
-                        enemy.pos.y += overlap_y if dy > 0 else -overlap_y
-                    enemy.rect.center = enemy.pos
-                    enemy_hitbox = enemy.rect.inflate(
-                        -enemy.rect.width  * 0.3,
-                        -enemy.rect.height * 0.3)
 
         # ── COLISIONES DE ARMAS Y LOOT DE EXPERIENCIA ────────────────────────
         hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False,
@@ -660,3 +696,45 @@ class GameSession:
                 pygame.draw.polygon(screen, arrow_color,     [tip, left, right])
                 pygame.draw.polygon(screen, (255, 255, 255), [tip, left, right], 2)
                 break   # solo hay un pedestal por sesión
+
+        # ── NOTIFICACIONES FLOTANTES ──────────────────────────────────────────
+        import math as _math
+        font_notif = self._get_font(22)
+        active_notifs = []
+        for notif in self._notifications:
+            notif["timer"] += 1
+            t   = notif["timer"]
+            mt  = notif["max_timer"]
+            if t >= mt:
+                continue
+            active_notifs.append(notif)
+
+            # Fade in (primeros 30 frames) y fade out (últimos 60 frames)
+            if t < 30:
+                alpha = int(255 * t / 30)
+            elif t > mt - 60:
+                alpha = int(255 * (mt - t) / 60)
+            else:
+                alpha = 255
+
+            # Slide in desde arriba
+            slide_y = int(max(0, (30 - t) / 30 * 40))
+
+            surf   = font_notif.render(notif["text"], True, notif["color"])
+            shadow = font_notif.render(notif["text"], True, (0, 0, 0))
+            surf.set_alpha(alpha); shadow.set_alpha(alpha)
+
+            # Fondo semitransparente
+            pad = 14
+            bg = pygame.Surface((surf.get_width() + pad * 2, surf.get_height() + pad), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, min(alpha, 160)))
+            bx = W // 2 - bg.get_width() // 2
+            by = H // 5 - bg.get_height() // 2 - slide_y
+            screen.blit(bg, (bx, by))
+
+            tx = W // 2 - surf.get_width() // 2
+            ty = by + pad // 2
+            screen.blit(shadow, (tx + 2, ty + 2))
+            screen.blit(surf,   (tx, ty))
+
+        self._notifications = active_notifs

@@ -78,7 +78,7 @@ class Engine:
         self._load_assets()
 
         self.network_socket = None
-        self.host = "3.250.166.96"
+        self.host = "18.202.57.121"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión

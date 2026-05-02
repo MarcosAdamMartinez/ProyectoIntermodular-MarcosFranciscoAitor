@@ -56,6 +56,10 @@ class Enemy(pygame.sprite.Sprite):
         self.max_hp = self.hp
         self.target = target
 
+        # Fuentes cacheadas (SysFont es caro, no crear cada frame)
+        self._font_small = pygame.font.SysFont("Arial", 15, bold=True)
+        self._font_boss  = pygame.font.SysFont("Arial", 16, bold=True)
+
         # Sonido de daño
         self._base_hurt_vol = 0.04
         try:
@@ -151,7 +155,7 @@ class Enemy(pygame.sprite.Sprite):
             pygame.draw.polygon(screen, (220, 20, 20), [tip, left, right])
             pygame.draw.polygon(screen, (255, 255, 255), [tip, left, right], 2)
 
-            font_small = pygame.font.SysFont("Arial", 15, bold=True)
+            font_small = self._font_small
             hp_txt = font_small.render(f"{self.hp}/{self.max_hp}", True, (255, 200, 200))
             screen.blit(hp_txt, (ax - hp_txt.get_width() // 2, ay - hp_txt.get_height() // 2 - 18))
 
@@ -174,7 +178,7 @@ class Enemy(pygame.sprite.Sprite):
             pygame.draw.rect(screen, bar_color,       (bx, by, fill_w, bar_h), border_radius=4)
             pygame.draw.rect(screen, (255, 255, 255), (bx, by, bar_w,  bar_h), 2, border_radius=4)
 
-            font_boss = pygame.font.SysFont("Arial", 16, bold=True)
+            font_boss = self._font_boss
             boss_names = {
                 "giga_zombie": "Giga Zombie",
                 "yeti":        "Yeti",

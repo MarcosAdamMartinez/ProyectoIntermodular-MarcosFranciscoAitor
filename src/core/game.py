@@ -8,6 +8,7 @@ from src.entities.experience import Exp
 from src.entities.bush import Bush
 from src.entities.rock import Rock
 from src.entities.portal import Portal
+from src.entities.pedestal import Pedestal, PEDESTAL_SPAWN_RADIUS_TILES, PEDESTAL_BOSS_NAMES
 from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE, BORDER_GREEN
 
 # Colores de fondo por mundo
@@ -83,6 +84,7 @@ class GameSession:
         self.portals    = pygame.sprite.Group()
         self.rocks      = pygame.sprite.Group()
         self.bushes     = pygame.sprite.Group()
+        self.pedestals  = pygame.sprite.Group()
 
         if carry_player is not None:
             self.local_player = carry_player
@@ -108,6 +110,10 @@ class GameSession:
         self.world_timer    = 0
         self.generated_chunks = set()
         self._volume_factor   = 1.0
+        self._near_pedestal   = None
+        self._pedestal_spawned = False
+        self._obstacles_cache  = []   # lista plana de obstáculos, reconstruida solo al generar chunks
+        self._ui_fonts         = {}   # caché de fuentes para draw_ui
 
         try:
             pygame.mixer.music.load("assets/sounds/music_game.mp3")
@@ -120,6 +126,27 @@ class GameSession:
             self.player_hurt_sound = None
 
     # ─────────────────────────────────────────────────────────────────────────
+    def _spawn_pedestal_guaranteed(self):
+        """Spawnea el pedestal en una posición aleatoria entre 1500 y 3000 px
+        del jugador inicial, en una dirección aleatoria.
+        Ajusta PEDESTAL_MIN_DIST y PEDESTAL_MAX_DIST para cambiar el rango."""
+        PEDESTAL_MIN_DIST = 5000   # ← mínimo en píxeles (~10 tiles de 512 px)
+        PEDESTAL_MAX_DIST = 8000   # ← máximo en píxeles (~16 tiles)
+
+        angle    = random.uniform(0, 360)
+        distance = random.randint(PEDESTAL_MIN_DIST, PEDESTAL_MAX_DIST)
+        offset   = pygame.math.Vector2(distance, 0).rotate(angle)
+        spawn_pos = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2) + offset
+
+        new_pedestal = Pedestal((int(spawn_pos.x), int(spawn_pos.y)), world=self.world)
+        new_pedestal.apply_volume_scale(self._volume_factor)
+        self.pedestals.add(new_pedestal)
+        self.all_sprites.add(new_pedestal)
+        self._pedestal_spawned = True
+        self._obstacles_cache  = list(self.rocks) + list(self.bushes) + list(self.pedestals)
+        print(f"[Pedestal] Spawneado en {spawn_pos} (distancia {distance:.0f} px, ángulo {angle:.0f}°)")
+
+    # ─────────────────────────────────────────────────────────────────────────
     def apply_volume_scale(self, factor):
         self._volume_factor = factor
         if self.player_hurt_sound:
@@ -129,6 +156,8 @@ class GameSession:
             enemy.apply_volume_scale(factor)
         for portal in self.portals:
             portal.apply_volume_scale(factor)
+        for pedestal in self.pedestals:
+            pedestal.apply_volume_scale(factor)
 
     # ─────────────────────────────────────────────────────────────────────────
     def update(self, username, socket):
@@ -150,6 +179,14 @@ class GameSession:
         self.exp.update()
         self.enemies.update()
         self.portals.update()
+        self.pedestals.update()
+
+        # Detectar pedestal más cercano en zona de interacción
+        self._near_pedestal = None
+        for ped in self.pedestals:
+            if ped.active and ped.player_in_summon_zone(self.local_player):
+                self._near_pedestal = ped
+                break
 
         if self.portals:
             hit_portal = pygame.sprite.spritecollideany(
@@ -169,10 +206,12 @@ class GameSession:
         px, py = self.local_player.pos.x, self.local_player.pos.y
         cx, cy = int(px // chunk_size), int(py // chunk_size)
 
+        new_chunk_added = False
         for i in range(cx - 1, cx + 2):
             for j in range(cy - 1, cy + 2):
                 if (i, j) not in self.generated_chunks:
                     self.generated_chunks.add((i, j))
+                    new_chunk_added = True
 
                     if random.random() < 0.6:
                         for _ in range(random.randint(1, 4)):
@@ -189,6 +228,9 @@ class GameSession:
                             new_rock = Rock((rx, ry), world=self.world)
                             self.rocks.add(new_rock)
                             self.all_sprites.add(new_rock)
+
+        if new_chunk_added:
+            self._obstacles_cache = list(self.rocks) + list(self.bushes) + list(self.pedestals)
 
         # ── SISTEMA DE PUNTOS ────────────────────────────────────────────────
         self.world_timer    += 1
@@ -238,41 +280,56 @@ class GameSession:
                 else:
                     self.current_phase = 4
 
-            elif self.current_phase == 4:
-                if not self.boss_spawned:
-                    boss_type = self._get_boss_type()
-                    boss = Enemy(target=self.local_player, enemy_type=boss_type)
-                    boss.apply_volume_scale(self._volume_factor)
-                    self.enemies.add(boss)
-                    self.all_sprites.add(boss)
-                    self.boss_spawned = True
+                # Spawn del pedestal al llegar a fase 3 (una sola vez)
+                if not self._pedestal_spawned:
+                    self._spawn_pedestal_guaranteed()
 
+            elif self.current_phase == 4:
+                # El boss ya no se invoca automáticamente — solo desde el pedestal.
                 # Fase 4: el spawn baja gradualmente sin límite hasta 1
-                # Primero baja rápido hasta el umbral de fase, luego muy
-                # despacio hacia 1 (un enemigo por tick = presión letal).
-                # El enemy_cap se ignora en fase 4 para que la presión sea real.
                 if self.spawn_rate > 1:
                     if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
-                        # Tramo inicial: misma velocidad que antes
                         self.spawn_rate -= 0.05
                     else:
-                        # Tramo infinito: baja muy despacio (≈3 min para llegar a 1)
                         self.spawn_rate = max(1, self.spawn_rate - 0.03)
 
-        # ── FÍSICAS RÍGIDAS ENTRE ENEMIGOS ───────────────────────────────────
+                if not self._pedestal_spawned:
+                    self._spawn_pedestal_guaranteed()
+
+        # ── FÍSICAS RÍGIDAS ENTRE ENEMIGOS (spatial hash) ─────────────────────
+        # En lugar de O(n²) comparamos solo enemigos en la misma celda/vecinas
+        CELL = 120   # tamaño de celda del grid; ~radio de separación máximo
+        grid: dict[tuple, list] = {}
         enemies_list = list(self.enemies)
-        for i in range(len(enemies_list)):
-            e1 = enemies_list[i]
-            for j in range(i + 1, len(enemies_list)):
-                e2 = enemies_list[j]
-                if e1.rect.colliderect(e2.rect):
+        for e in enemies_list:
+            cx_ = int(e.pos.x // CELL)
+            cy_ = int(e.pos.y // CELL)
+            grid.setdefault((cx_, cy_), []).append(e)
+
+        for (cx_, cy_), cell_enemies in grid.items():
+            # Reunir candidatos: celda propia + 8 vecinas
+            candidates = []
+            for dx_ in (-1, 0, 1):
+                for dy_ in (-1, 0, 1):
+                    candidates.extend(grid.get((cx_ + dx_, cy_ + dy_), []))
+
+            for i, e1 in enumerate(cell_enemies):
+                for e2 in candidates:
+                    if e2 is e1:
+                        continue
+                    # Evitar procesar el par dos veces usando id
+                    if id(e2) <= id(e1):
+                        continue
                     rad1 = 100 if e1.is_boss_type() else 40
                     rad2 = 100 if e2.is_boss_type() else 40
                     min_dist = (rad1 + rad2) / 2
-                    dist = e1.pos.distance_to(e2.pos)
-                    if dist < min_dist and dist > 0:
+                    diff = e1.pos - e2.pos
+                    dist_sq = diff.x * diff.x + diff.y * diff.y
+                    min_sq  = min_dist * min_dist
+                    if 0 < dist_sq < min_sq:
+                        dist   = dist_sq ** 0.5
                         overlap = min_dist - dist
-                        push = (e1.pos - e2.pos).normalize() * (overlap / 2)
+                        push   = diff / dist * (overlap / 2)
                         e1.pos += push
                         e2.pos -= push
                         e1.rect.center = e1.pos
@@ -280,22 +337,25 @@ class GameSession:
 
         # ── JUGADOR VS ENEMIGOS ───────────────────────────────────────────────
         damage_taken = False
-        for enemy in self.enemies:
-            if self.local_player.rect.colliderect(enemy.rect):
-                rad  = 100 if enemy.is_boss_type() else 45
-                dist = self.local_player.pos.distance_to(enemy.pos)
-
-                if dist < rad and dist > 0:
-                    overlap = rad - dist
-                    push = (self.local_player.pos - enemy.pos).normalize() * (overlap / 2)
-                    self.local_player.pos += push
-                    enemy.pos -= push
-                    self.local_player.rect.center = self.local_player.pos
-                    enemy.rect.center = enemy.pos
-
-                attack_rad = 105 if enemy.is_boss_type() else 50
-                if dist < attack_rad:
-                    damage_taken = True
+        player_pos = self.local_player.pos
+        for enemy in enemies_list:
+            diff = player_pos - enemy.pos
+            dist_sq = diff.x * diff.x + diff.y * diff.y
+            attack_rad = 105 if enemy.is_boss_type() else 50
+            if dist_sq >= attack_rad * attack_rad * 4:   # culling rápido
+                continue
+            dist = dist_sq ** 0.5
+            rad  = 100 if enemy.is_boss_type() else 45
+            if dist < rad and dist > 0:
+                overlap = rad - dist
+                push = diff / dist * (overlap / 2)
+                self.local_player.pos += push
+                enemy.pos -= push
+                self.local_player.rect.center = self.local_player.pos
+                enemy.rect.center = enemy.pos
+                player_pos = self.local_player.pos   # actualizar ref
+            if dist < attack_rad:
+                damage_taken = True
 
         if damage_taken:
             self.local_player.take_damage(1)
@@ -303,47 +363,49 @@ class GameSession:
                 self.player_hurt_sound.play()
 
         # ── COLISIÓN JUGADOR VS ROCAS Y ÁRBOLES ──────────────────────────────
-        for obstacle in list(self.rocks) + list(self.bushes):
+        player_hitbox = self.local_player.rect.inflate(
+            -self.local_player.rect.width  * 0.6,
+            -self.local_player.rect.height * 0.6)
+        for obstacle in self._obstacles_cache:
             hit_rect = getattr(obstacle, 'hit_rect', obstacle.rect)
-
-            player_hitbox = self.local_player.rect.inflate(
-                -self.local_player.rect.width  * 0.6,
-                -self.local_player.rect.height * 0.6)
-
-            if player_hitbox.colliderect(hit_rect):
-                dx = player_hitbox.centerx - hit_rect.centerx
-                dy = player_hitbox.centery - hit_rect.centery
-                overlap_x = (player_hitbox.width  / 2 + hit_rect.width  / 2) - abs(dx)
-                overlap_y = (player_hitbox.height / 2 + hit_rect.height / 2) - abs(dy)
-
-                if overlap_x > 0 and overlap_y > 0:
-                    if overlap_x < overlap_y:
-                        self.local_player.pos.x += overlap_x if dx > 0 else -overlap_x
-                    else:
-                        self.local_player.pos.y += overlap_y if dy > 0 else -overlap_y
-                    self.local_player.rect.center = self.local_player.pos
+            if not player_hitbox.colliderect(hit_rect):
+                continue
+            dx = player_hitbox.centerx - hit_rect.centerx
+            dy = player_hitbox.centery - hit_rect.centery
+            overlap_x = (player_hitbox.width  / 2 + hit_rect.width  / 2) - abs(dx)
+            overlap_y = (player_hitbox.height / 2 + hit_rect.height / 2) - abs(dy)
+            if overlap_x > 0 and overlap_y > 0:
+                if overlap_x < overlap_y:
+                    self.local_player.pos.x += overlap_x if dx > 0 else -overlap_x
+                else:
+                    self.local_player.pos.y += overlap_y if dy > 0 else -overlap_y
+                self.local_player.rect.center = self.local_player.pos
+                player_hitbox = self.local_player.rect.inflate(
+                    -self.local_player.rect.width  * 0.6,
+                    -self.local_player.rect.height * 0.6)
 
         # ── COLISIÓN ENEMIGOS VS ROCAS Y ÁRBOLES ─────────────────────────────
-        for enemy in self.enemies:
-            for obstacle in list(self.rocks) + list(self.bushes):
+        for enemy in enemies_list:
+            enemy_hitbox = enemy.rect.inflate(
+                -enemy.rect.width  * 0.3,
+                -enemy.rect.height * 0.3)
+            for obstacle in self._obstacles_cache:
                 hit_rect = getattr(obstacle, 'hit_rect', obstacle.rect)
-
-                enemy_hitbox = enemy.rect.inflate(
-                    -enemy.rect.width  * 0.3,
-                    -enemy.rect.height * 0.3)
-
-                if enemy_hitbox.colliderect(hit_rect):
-                    dx = enemy_hitbox.centerx - hit_rect.centerx
-                    dy = enemy_hitbox.centery - hit_rect.centery
-                    overlap_x = (enemy_hitbox.width  / 2 + hit_rect.width  / 2) - abs(dx)
-                    overlap_y = (enemy_hitbox.height / 2 + hit_rect.height / 2) - abs(dy)
-
-                    if overlap_x > 0 and overlap_y > 0:
-                        if overlap_x < overlap_y:
-                            enemy.pos.x += overlap_x if dx > 0 else -overlap_x
-                        else:
-                            enemy.pos.y += overlap_y if dy > 0 else -overlap_y
-                        enemy.rect.center = enemy.pos
+                if not enemy_hitbox.colliderect(hit_rect):
+                    continue
+                dx = enemy_hitbox.centerx - hit_rect.centerx
+                dy = enemy_hitbox.centery - hit_rect.centery
+                overlap_x = (enemy_hitbox.width  / 2 + hit_rect.width  / 2) - abs(dx)
+                overlap_y = (enemy_hitbox.height / 2 + hit_rect.height / 2) - abs(dy)
+                if overlap_x > 0 and overlap_y > 0:
+                    if overlap_x < overlap_y:
+                        enemy.pos.x += overlap_x if dx > 0 else -overlap_x
+                    else:
+                        enemy.pos.y += overlap_y if dy > 0 else -overlap_y
+                    enemy.rect.center = enemy.pos
+                    enemy_hitbox = enemy.rect.inflate(
+                        -enemy.rect.width  * 0.3,
+                        -enemy.rect.height * 0.3)
 
         # ── COLISIONES DE ARMAS Y LOOT DE EXPERIENCIA ────────────────────────
         hits = pygame.sprite.groupcollide(self.enemies, self.projectiles, False, False,
@@ -449,12 +511,35 @@ class GameSession:
         self.all_sprites.add(portal)
 
     # ─────────────────────────────────────────────────────────────────────────
+    def try_summon_boss(self):
+        """Llama esto cuando el jugador pulsa E. Invoca al boss si procede."""
+        if self._near_pedestal is None:
+            return
+        if self.boss_spawned or self.boss_defeated:
+            return
+        if self._near_pedestal.summon_boss():
+            boss_type = self._get_boss_type()
+            boss = Enemy(target=self.local_player, enemy_type=boss_type)
+            boss.apply_volume_scale(self._volume_factor)
+            self.enemies.add(boss)
+            self.all_sprites.add(boss)
+            self.boss_spawned = True
+            self._near_pedestal = None
+
+    # ─────────────────────────────────────────────────────────────────────────
     def draw(self, screen):
         self.all_sprites.custom_draw(self.local_player)
         for enemy in self.enemies:
             if enemy.is_boss_type():
                 enemy.draw_boss_ui(screen, self.all_sprites.offset)
         self.draw_ui(screen)
+
+    def _get_font(self, size, bold=True):
+        """Devuelve una fuente cacheada — SysFont es muy caro si se llama cada frame."""
+        key = (size, bold)
+        if key not in self._ui_fonts:
+            self._ui_fonts[key] = pygame.font.SysFont("Arial", size, bold=bold)
+        return self._ui_fonts[key]
 
     def draw_ui(self, screen):
         W = screen.get_width()
@@ -482,7 +567,7 @@ class GameSession:
         pygame.draw.rect(screen, (255, 255, 255), pygame.Rect(x, xp_y, bar_width, bar_height), 2)
 
         # Nivel
-        font = pygame.font.SysFont("Arial", 20, bold=True)
+        font = self._get_font(20)
         lvl_text = font.render(f"Nivel: {self.local_player.level}", True, (255, 255, 255))
         screen.blit(lvl_text, (x + bar_width + 15, y + 10))
 
@@ -492,7 +577,7 @@ class GameSession:
         world_name   = world_names.get(self.world, f"Mundo {self.world}")
         world_color  = world_colors.get(self.world, WHITE)
 
-        font_world  = pygame.font.SysFont("Arial", 26, bold=True)
+        font_world  = self._get_font(26)
         world_text  = font_world.render(world_name, True, world_color)
         shadow_text = font_world.render(world_name, True, (0, 0, 0))
         world_rect  = world_text.get_rect(midtop=(W // 2, 10))
@@ -500,14 +585,78 @@ class GameSession:
         screen.blit(world_text,  world_rect)
 
         # Score
-        font_score = pygame.font.SysFont("Arial", 20, bold=True)
+        font_score = self._get_font(20)
         txt_score  = font_score.render(f"Score: {self.score}", True, WHITE)
         screen.blit(txt_score, txt_score.get_rect(topright=(W - 20, 20)))
 
         # Aviso de portal activo
         if self.portals and self.boss_defeated:
-            font_portal = pygame.font.SysFont("Arial", 22, bold=True)
+            font_portal = self._get_font(22)
             alpha = int(abs(pygame.time.get_ticks() % 1200 - 600) / 600 * 255)
             msg = font_portal.render("¡Portal activo! Entra para continuar al siguiente mundo", True, (200, 150, 255))
             msg.set_alpha(alpha)
             screen.blit(msg, msg.get_rect(center=(W // 2, H - 40)))
+
+        # Aviso de pedestal cercano
+        if self._near_pedestal is not None and not self.boss_spawned and not self.boss_defeated:
+            boss_name = PEDESTAL_BOSS_NAMES.get(self.world, "Boss")
+            font_ped  = self._get_font(24)
+            alpha     = int(abs(pygame.time.get_ticks() % 1000 - 500) / 500 * 255)
+            world_prompt_colors = {1: (120, 255, 120), 2: (120, 180, 255), 3: (255, 120, 60)}
+            prompt_color = world_prompt_colors.get(self.world, (255, 255, 255))
+            msg_ped = font_ped.render(f"Presiona E para invocar a {boss_name}", True, prompt_color)
+            shadow  = font_ped.render(f"Presiona E para invocar a {boss_name}", True, (0, 0, 0))
+            msg_ped.set_alpha(alpha); shadow.set_alpha(alpha)
+            cx, cy = W // 2, H - 80
+            screen.blit(shadow,  shadow.get_rect(center=(cx + 2, cy + 2)))
+            screen.blit(msg_ped, msg_ped.get_rect(center=(cx,     cy)))
+
+        # Flecha hacia el pedestal (cuando no está en pantalla y el boss no ha sido invocado)
+        if not self.boss_spawned and not self.boss_defeated:
+            for ped in self.pedestals:
+                if not ped.active:
+                    continue
+                import math as _math
+                offset = self.all_sprites.offset
+                screen_cx = W // 2
+                screen_cy = H // 2
+
+                # Posición del pedestal en pantalla
+                ped_sx = ped.rect.centerx - offset.x
+                ped_sy = ped.rect.centery - offset.y
+
+                # Solo dibujar la flecha si está FUERA de pantalla
+                if 0 <= ped_sx <= W and 0 <= ped_sy <= H:
+                    break   # está en pantalla, no hace falta flecha
+
+                dx = ped_sx - screen_cx
+                dy = ped_sy - screen_cy
+                dist   = max(1, _math.hypot(dx, dy))
+                nx, ny = dx / dist, dy / dist
+
+                # Clampeamos el punto de la flecha al borde interior de la pantalla
+                margin = 70
+                scale  = min(
+                    (screen_cx - margin) / max(abs(nx), 0.001),
+                    (screen_cy - margin) / max(abs(ny), 0.001),
+                )
+                ax = int(screen_cx + nx * scale)
+                ay = int(screen_cy + ny * scale)
+
+                angle = _math.atan2(ny, nx)
+                arrow_len = 24
+                arrow_w   = 12
+
+                tip   = (ax + int(_math.cos(angle) * arrow_len),
+                         ay + int(_math.sin(angle) * arrow_len))
+                left  = (ax + int(_math.cos(angle + _math.pi * 0.75) * arrow_w),
+                         ay + int(_math.sin(angle + _math.pi * 0.75) * arrow_w))
+                right = (ax + int(_math.cos(angle - _math.pi * 0.75) * arrow_w),
+                         ay + int(_math.sin(angle - _math.pi * 0.75) * arrow_w))
+
+                world_arrow_colors = {1: (80, 220, 80), 2: (80, 160, 255), 3: (255, 100, 30)}
+                arrow_color = world_arrow_colors.get(self.world, (255, 220, 50))
+
+                pygame.draw.polygon(screen, arrow_color,     [tip, left, right])
+                pygame.draw.polygon(screen, (255, 255, 255), [tip, left, right], 2)
+                break   # solo hay un pedestal por sesión

@@ -85,7 +85,6 @@ class AnimationController:
         i = 1
         while True:
             path = os.path.join(folder, f"{i}.png")
-            print(f"Buscando frame: {path} | ¿Existe? {os.path.exists(path)}")
             if not os.path.exists(path):
                 break
 

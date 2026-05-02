@@ -78,7 +78,7 @@ class Engine:
         self._load_assets()
 
         self.network_socket = None
-        self.host = "34.242.27.170"
+        self.host = "3.250.166.96"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
@@ -505,9 +505,10 @@ class Engine:
         # Ancla: inputs centrados en H//2 - algo, luego botones debajo con gap uniforme
         user_rect   = pygame.Rect(cx - iw // 2, H // 2 - self._sy(95), iw, ih)
         pass_rect   = pygame.Rect(cx - iw // 2, user_rect.bottom + gap, iw, ih)
-        btn_log     = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28), bw, bh)
-        btn_offline = pygame.Rect(cx - bw // 2, btn_log.bottom    + gap,         bw, bh)
-        btn_volver  = pygame.Rect(cx - bw // 2, btn_offline.bottom + gap,        bw, bh)
+        err_gap     = self._sy(44)   # espacio reservado para el mensaje de error
+        btn_log     = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28) + err_gap, bw, bh)
+        btn_offline = pygame.Rect(cx - bw // 2, btn_log.bottom    + gap,                   bw, bh)
+        btn_volver  = pygame.Rect(cx - bw // 2, btn_offline.bottom + gap,                  bw, bh)
 
         color_active   = (50, 150, 255)
         color_inactive = (95, 99, 104)
@@ -593,8 +594,9 @@ class Engine:
 
         user_rect = pygame.Rect(cx - iw // 2, H // 2 - self._sy(95), iw, ih)
         pass_rect = pygame.Rect(cx - iw // 2, user_rect.bottom + gap, iw, ih)
-        btn_log   = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28), bw, bh)
-        btn_volver= pygame.Rect(cx - bw // 2, btn_log.bottom   + gap,          bw, bh)
+        err_gap   = self._sy(44)
+        btn_log   = pygame.Rect(cx - bw // 2, pass_rect.bottom + self._sy(28) + err_gap, bw, bh)
+        btn_volver= pygame.Rect(cx - bw // 2, btn_log.bottom   + gap,                    bw, bh)
 
         color_active = (50, 150, 255); color_inactive = (95, 99, 104)
         color_user = color_active if self.active_input == "username" else color_inactive
@@ -1000,6 +1002,9 @@ class Engine:
                 return
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_k:
                 self.game.current_phase = 4
+                self.game.spawn_rate = 6
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                self.game.try_summon_boss()
 
         estado_juego = self.game.update(self.username_text, self.network_socket)
 

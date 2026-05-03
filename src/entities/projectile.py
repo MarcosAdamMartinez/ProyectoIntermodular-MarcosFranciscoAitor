@@ -75,3 +75,66 @@ class Projectile(pygame.sprite.Sprite):
             if self.lifetime <= 0:
                 self.kill()
             self.rect.center = self.pos
+
+class BurnZone(pygame.sprite.Sprite):
+    """
+    Área de quemadura que deja la varita al impactar.
+    Círculo naranja semitransparente con borde sólido.
+    Dura ~60 frames (1 segundo a 60 fps) y aplica daño periódico.
+    """
+    RADIUS      = 35       # radio en píxeles — modifica aquí para ajustar el área
+    DURATION    = 60       # frames de vida (60 = 1 segundo)
+    TICK_RATE   = 10       # frames entre cada tick de daño
+    BURN_DAMAGE = 3        # daño por tick
+
+    # Colores
+    COLOR_FILL   = (255, 120, 20)   # naranja interior
+    COLOR_BORDER = (255, 60,  0)    # naranja oscuro borde
+    FILL_ALPHA   = 90               # opacidad del relleno (0-255)
+
+    def __init__(self, pos):
+        super().__init__()
+        self.pos      = pygame.math.Vector2(pos)
+        self.timer    = 0
+        self.tick     = 0
+        self.hit_enemies = []       # enemigos ya dañados en este tick
+
+        d = self.RADIUS * 2
+        self.image = pygame.Surface((d, d), pygame.SRCALPHA)
+        self._draw()
+        self.rect = self.image.get_rect(center=(int(pos[0]), int(pos[1])))
+
+    def _draw(self):
+        self.image.fill((0, 0, 0, 0))
+        r   = self.RADIUS
+        cx  = cy = r
+
+        # Relleno semitransparente
+        fill_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(fill_surf, (*self.COLOR_FILL, self.FILL_ALPHA), (r, r), r)
+        self.image.blit(fill_surf, (0, 0))
+
+        # Borde sólido
+        pygame.draw.circle(self.image, (*self.COLOR_BORDER, 255), (cx, cy), r, 3)
+
+    def update(self):
+        self.timer += 1
+        self.tick  += 1
+
+        # Fade out en el último tercio de vida
+        if self.timer > self.DURATION * 2 // 3:
+            remaining = self.DURATION - self.timer
+            alpha = max(0, int(255 * remaining / (self.DURATION // 3)))
+            self.image.fill((0, 0, 0, 0))
+            r = self.RADIUS
+            fill_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(fill_surf, (*self.COLOR_FILL, int(self.FILL_ALPHA * alpha / 255)), (r, r), r)
+            self.image.blit(fill_surf, (0, 0))
+            pygame.draw.circle(self.image, (*self.COLOR_BORDER, alpha), (r, r), r, 3)
+
+        if self.tick >= self.TICK_RATE:
+            self.tick = 0
+            self.hit_enemies.clear()   # resetear para el siguiente tick
+
+        if self.timer >= self.DURATION:
+            self.kill()

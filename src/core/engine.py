@@ -1099,6 +1099,7 @@ class Engine:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_k:
                 self.game.current_phase = 4
                 self.game.spawn_rate = 6
+                self.game.local_player.level = 49
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 self.game.try_summon_boss()
 
@@ -1118,7 +1119,34 @@ class Engine:
             return
         elif estado_juego == "LEVEL_UP":
             self.state = "LEVEL_UP"
-            self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+            player     = self.game.local_player
+            char       = getattr(self, "character_name", "caballero")
+            lvl        = player.level
+
+            # Comprobar si este nivel es un nivel de desbloqueo de arma
+            if lvl in WEAPON_UNLOCK_LEVELS:
+                unlocks    = WEAPON_UNLOCKS.get(lvl, {}).get(char, [])
+                # Filtrar las armas que el jugador aún no tiene
+                owned      = {w.name for w in player.weapons}
+                available  = [w for w in unlocks if w not in owned]
+                if available:
+                    # Construir opciones de tipo "arma nueva" para el menú
+                    self.current_choices = [
+                        {"id": f"weapon_{w}", "name": f"Arma: {w.capitalize()}",
+                         "desc": "¡Nuevo tipo de ataque!",
+                         "type": "new_weapon", "value": w}
+                        for w in available
+                    ]
+                    # Rellenar hasta 3 con mejoras normales si sobran huecos
+                    if len(self.current_choices) < 3:
+                        extras = [u for u in UPGRADES
+                                  if u not in self.current_choices]
+                        self.current_choices += random.sample(
+                            extras, min(3 - len(self.current_choices), len(extras)))
+                else:
+                    self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+            else:
+                self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
         elif estado_juego == "NEXT_WORLD":
             next_world = self.game.world + 1
             if next_world <= 3:
@@ -1237,12 +1265,13 @@ class Engine:
 
         # ── Iconos de mejora por tipo ─────────────────────────────────────────
         UPGRADE_ICONS = {
-            "max_hp":  ("assets/sprites/icons/hp_up.png",     "",  (200,  40,  40)),
-            "speed":   ("assets/sprites/icons/speed_up.png",  "", ( 60, 160, 255)),
-            "damage":  ("assets/sprites/icons/dmg_up.png",    "",  (255, 120,  30)),
-            "cooldown":("assets/sprites/icons/cd_down.png",   "", (255, 200,   0)),
-            "magnet":  ("assets/sprites/icons/magnet_up.png", "", (120,  80, 220)),
-            "hp":      ("assets/sprites/icons/heal_up.png",   "", ( 50, 200, 100)),
+            "max_hp":     ("assets/sprites/icons/hp_up.png",     "",  (200,  40,  40)),
+            "speed":      ("assets/sprites/icons/speed_up.png",  "",  ( 60, 160, 255)),
+            "damage":     ("assets/sprites/icons/dmg_up.png",    "",  (255, 120,  30)),
+            "cooldown":   ("assets/sprites/icons/cd_down.png",   "",  (255, 200,   0)),
+            "magnet":     ("assets/sprites/icons/magnet_up.png", "",  (120,  80, 220)),
+            "hp":         ("assets/sprites/icons/heal_up.png",   "",  ( 50, 200, 100)),
+            "new_weapon": ("",                                    "⚔", (220, 180,  40)),
         }
 
         # ── Layout de tarjetas ────────────────────────────────────────────────

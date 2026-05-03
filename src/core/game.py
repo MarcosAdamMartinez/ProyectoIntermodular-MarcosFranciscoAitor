@@ -9,6 +9,7 @@ from src.entities.bush import Bush
 from src.entities.rock import Rock
 from src.entities.portal import Portal
 from src.entities.pedestal import Pedestal, PEDESTAL_SPAWN_RADIUS_TILES, PEDESTAL_BOSS_NAMES
+from src.entities.projectile import BurnZone
 from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE, BORDER_GREEN
 
 # Colores de fondo por mundo
@@ -84,6 +85,7 @@ class GameSession:
         self.portals    = pygame.sprite.Group()
         self.rocks      = pygame.sprite.Group()
         self.bushes     = pygame.sprite.Group()
+        self.burn_zones = pygame.sprite.Group()
         self.pedestals  = pygame.sprite.Group()
 
         if carry_player is not None:
@@ -302,6 +304,20 @@ class GameSession:
         self.enemies.update()
         self.portals.update()
         self.pedestals.update()
+        self.burn_zones.update()
+
+        # Daño de quemadura por tick
+        for bz in list(self.burn_zones):
+            if bz.tick == 0:   # justo tras resetear hit_enemies en update()
+                for enemy in list(self.enemies):
+                    if enemy in bz.hit_enemies:
+                        continue
+                    dx = enemy.pos.x - bz.pos.x
+                    dy = enemy.pos.y - bz.pos.y
+                    if dx*dx + dy*dy <= BurnZone.RADIUS ** 2:
+                        if enemy.take_damage(BurnZone.BURN_DAMAGE):
+                            self.on_enemy_killed(enemy)
+                        bz.hit_enemies.append(enemy)
 
         # Detectar pedestal más cercano en zona de interacción
         self._near_pedestal = None
@@ -441,7 +457,7 @@ class GameSession:
                         e2.rect.center = e2.pos
 
         # ── JUGADOR VS ENEMIGOS ───────────────────────────────────────────────
-        damage_taken = False
+        max_contact_damage = 0
         player_pos = self.local_player.pos
         for enemy in enemies_list:
             diff = player_pos - enemy.pos
@@ -460,10 +476,10 @@ class GameSession:
                 enemy.rect.center = enemy.pos
                 player_pos = self.local_player.pos   # actualizar ref
             if dist < attack_rad:
-                damage_taken = True
+                max_contact_damage = max(max_contact_damage, enemy.contact_damage)
 
-        if damage_taken:
-            self.local_player.take_damage(1)
+        if max_contact_damage > 0:
+            self.local_player.take_damage(max_contact_damage)
             if self.player_hurt_sound:
                 self.player_hurt_sound.play()
 
@@ -506,8 +522,14 @@ class GameSession:
                             self.on_enemy_killed(enemy)
                         proj.hit_enemies.append(enemy)
                 else:
-                    if enemy.take_damage(proj.damage):
+                    killed = enemy.take_damage(proj.damage)
+                    if killed:
                         self.on_enemy_killed(enemy)
+                    # Crear zona de quemadura si el arma tiene la flag "burn"
+                    if proj.stats.get("burn"):
+                        bz = BurnZone(proj.pos)
+                        self.burn_zones.add(bz)
+                        self.all_sprites.add(bz)
                     proj.kill()
 
         # ── IMÁN DE EXPERIENCIA ───────────────────────────────────────────────
@@ -524,9 +546,9 @@ class GameSession:
     def _get_spawn_type(self):
         if self.world == 1:
             if self.current_phase == 1:
-                return random.choice(["slime", "slime"])
+                return random.choice(["zombie", "slime"])
             elif self.current_phase == 2:
-                return random.choice(["slime", "goblin"])
+                return random.choice(["zombie", "slime", "goblin"])
             elif self.current_phase == 3:
                 return random.choice(["goblin", "goblin", "slime", "zombie"])
             else:
@@ -540,7 +562,7 @@ class GameSession:
             elif self.current_phase == 3:
                 return random.choice(["golem", "skeleton", "skeleton"])
             else:
-                return random.choice(["skeleton", "skeleton", "golem", "zombie"])
+                return random.choice(["skeleton", "golem", "zombie"])
 
         elif self.world == 3:
             if self.current_phase == 1:

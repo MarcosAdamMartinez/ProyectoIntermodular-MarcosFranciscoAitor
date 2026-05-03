@@ -12,7 +12,7 @@ class Enemy(pygame.sprite.Sprite):
 
         # Estadísticas y tamaño según tipo
         if enemy_type == "zombie":
-            size = (70, 60);  color = RED;              self.speed = random.uniform(1.5, 2.5);  self.hp = 20
+            size = (70, 60);   color = RED;              self.speed = random.uniform(1.5, 2.5);  self.hp = 20
         elif enemy_type == "slime":
             size = (80, 70);   color = (0, 200, 100);   self.speed = random.uniform(1.2, 2.0);  self.hp = 12
         elif enemy_type == "goblin":
@@ -20,7 +20,7 @@ class Enemy(pygame.sprite.Sprite):
         elif enemy_type == "skeleton":
             size = (70, 60);   color = (200, 200, 200); self.speed = random.uniform(2.5, 3.5);  self.hp = 80
         elif enemy_type == "golem":
-            size = (90, 90); color = (100, 80, 60);   self.speed = random.uniform(1.0, 1.8);  self.hp = 180
+            size = (90, 90);   color = (100, 80, 60);   self.speed = random.uniform(1.0, 1.8);  self.hp = 180
         elif enemy_type == "bat":
             size = (80, 80);   color = (80, 0, 80);     self.speed = random.uniform(3.0, 4.5);  self.hp = 30
         elif enemy_type == "demon":
@@ -33,6 +33,9 @@ class Enemy(pygame.sprite.Sprite):
             size = (200, 200); color = (120, 40, 10);   self.speed = random.uniform(1.5, 2.2);  self.hp = 1000
         else:  # boss genérico
             size = (200, 200); color = (150, 0, 0);     self.speed = random.uniform(1.0, 1.5);  self.hp = 500
+
+        # Daño por contacto configurable desde settings
+        self.contact_damage = ENEMY_CONTACT_DAMAGE.get(enemy_type, 1)
 
         # Imagen estática de fallback
         fallback = load_sprite(f"assets/sprites/enemies/{enemy_type}.png", size, color)

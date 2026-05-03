@@ -59,8 +59,41 @@ CHARACTERS = {
 # DATOS DE ARMAS
 WEAPONS = {
     "espada": {"cooldown": 20, "damage": 100, "speed": 0, "color": WHITE, "type": "melee", "melee": True},
-    "varita": {"cooldown": 45, "damage": 10, "speed": 10, "color": YELLOW, "type": "ranged"},
-    "banana": {"cooldown": 30, "damage": 10, "speed": 7, "color": YELLOW, "type": "banana", "boomerang": True}
+    "varita": {"cooldown": 45, "damage": 10,  "speed": 10, "color": YELLOW, "type": "ranged", "burn": True},
+    "banana": {"cooldown": 30, "damage": 10,  "speed": 7,  "color": YELLOW, "type": "banana", "boomerang": True}
+}
+
+# Qué arma desbloquea cada personaje al alcanzar los niveles especiales
+# (las armas de los otros dos héroes)
+WEAPON_UNLOCKS = {
+    # nivel: {personaje_activo: [arma1, arma2]}
+    50:  {
+        "caballero": ["varita", "banana"],
+        "mago":      ["espada", "banana"],
+        "my_uncle":  ["espada", "varita"],
+    },
+    75:  {
+        "caballero": ["varita", "banana"],
+        "mago":      ["espada", "banana"],
+        "my_uncle":  ["espada", "varita"],
+    },
+}
+# Niveles en los que se ofrece el menú de desbloqueo de arma
+WEAPON_UNLOCK_LEVELS = [50, 75]
+
+# Daño por contacto de cada tipo de enemigo (por frame tocando al jugador)
+ENEMY_CONTACT_DAMAGE = {
+    "zombie":      1,
+    "slime":       1,
+    "goblin":      1,
+    "skeleton":    2,
+    "golem":       2,
+    "bat":         1,
+    "demon":       3,
+    "giga_zombie": 4,
+    "yeti":        5,
+    "minotaur":    6,
+    "boss":        4,
 }
 
 # DATOS DE MEJORAS

@@ -132,3 +132,8 @@ class Player(pygame.sprite.Sprite):
                 self.hp += upgrade["value"]
             else:
                 self.hp = self.max_hp
+        elif upgrade["type"] == "new_weapon":
+            weapon_name = upgrade["value"]
+            owned = {w.name for w in self.weapons}
+            if weapon_name not in owned:
+                self.add_weapon(weapon_name)

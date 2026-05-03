@@ -248,7 +248,7 @@ class Engine:
         port = 6667
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(2)
             sock.connect((self.host, port))
             # Comando especial de sincronización offline
             sock.sendall(f"offline_sync:{user}:{password}:{score}\n".encode())
@@ -880,10 +880,15 @@ class Engine:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _fetch_scoreboard_guest(self):
-        """Abre conexión temporal y pide el ranking sin login."""
+        """Abre conexión temporal y pide el ranking sin login.
+        En modo offline (o sin red) carga los datos de offline.json sin explotar."""
+        if self.offline_mode:
+            # En offline no hay servidor: dejar la tabla vacía (o la que ya había)
+            self.last_basc_time = pygame.time.get_ticks()
+            return
         try:
             tmp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            tmp.settimeout(5)
+            tmp.settimeout(2)
             tmp.connect((self.host, 6667))
             tmp.sendall("basc_guest:\n".encode())
             data = tmp.recv(4096).decode().strip()
@@ -898,9 +903,15 @@ class Engine:
                             self.scoreboard_data.append((u, s))
             self.last_basc_time = pygame.time.get_ticks()
         except Exception as e:
-            print(f"Error scoreboard guest: {e}")
+            # Sin conexión: no explotar, simplemente dejar los datos que ya había
+            print(f"Scoreboard sin conexión (modo invitado): {e}")
+            self.last_basc_time = pygame.time.get_ticks()
 
     def get_scoreboard(self):
+        if self.offline_mode:
+            # En offline no se consulta el servidor; marcar como "consultado"
+            self.last_basc_time = pygame.time.get_ticks()
+            return
         if self.network_socket:
             try:
                 self.network_socket.sendall("basc:u:s\n".encode())
@@ -914,12 +925,42 @@ class Engine:
         else:
             self._fetch_scoreboard_guest()
 
+    def _get_my_score_and_rank(self):
+        """
+        Devuelve (my_score, my_rank) para el usuario actual.
+        - Online: busca el username en scoreboard_data (que viene del servidor).
+        - Offline: lee offline.json.
+        my_rank es 1-based si aparece en el top-10, o None si no está.
+        """
+        username = self.username_text.strip()
+
+        if self.offline_mode:
+            datos = self._load_offline()
+            my_score = datos.get("max_score", 0)
+        else:
+            my_score = None
+            # Intentar sacar el score del propio ranking descargado
+            for i, (u, s) in enumerate(self.scoreboard_data):
+                if u == username:
+                    my_score = int(s)
+                    break
+
+        # Posición en el ranking descargado (top-10)
+        my_rank = None
+        for i, (u, s) in enumerate(self.scoreboard_data):
+            if u == username:
+                my_rank = i + 1
+                break
+
+        return my_score, my_rank
+
     def menu_score_loop(self):
         W, H = self.W, self.H
         ahora = pygame.time.get_ticks()
         if ahora - self.last_basc_time > 15000:
             self.get_scoreboard()
 
+        # Recibir datos del servidor si hay socket online
         if self.network_socket:
             try:
                 self.network_socket.setblocking(False)
@@ -935,7 +976,6 @@ class Engine:
             except (BlockingIOError, socket.error):
                 pass
             except Exception:
-                # Socket roto — limpiar
                 try: self.network_socket.close()
                 except: pass
                 self.network_socket = None
@@ -948,33 +988,89 @@ class Engine:
         self.screen.blit(overlay, (0, 0))
 
         font       = pygame.font.SysFont("Arial", self._sf(40), bold=True)
-        font_small = pygame.font.SysFont("Arial", self._sf(30))
+        font_small = pygame.font.SysFont("Arial", self._sf(28))
+        font_info  = pygame.font.SysFont("Arial", self._sf(22), bold=True)
 
         title = font.render("TABLA DE CLASIFICACION", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(W // 2, self._sy(100))))
+        self.screen.blit(title, title.get_rect(center=(W // 2, self._sy(90))))
 
-        panel_w, panel_h = self._sx(700), self._sy(450)
-        panel = pygame.Rect(W // 2 - panel_w // 2, self._sy(180), panel_w, panel_h)
+        # ── Panel del ranking ──────────────────────────────────────────────
+        panel_w, panel_h = self._sx(700), self._sy(420)
+        panel_y = self._sy(160)
+        panel = pygame.Rect(W // 2 - panel_w // 2, panel_y, panel_w, panel_h)
         pygame.draw.rect(self.screen, (32, 33, 36), panel, border_radius=15)
         pygame.draw.rect(self.screen, (95, 99, 104), panel, width=2, border_radius=15)
 
-        start_y = self._sy(220)
-        if not self.scoreboard_data:
-            ph = font_small.render("Cargando datos...", True, (200, 200, 200))
-            self.screen.blit(ph, ph.get_rect(center=(W // 2, self._sy(400))))
-        else:
-            row_h = self._sy(40)
-            for i, (user, score) in enumerate(self.scoreboard_data):
-                color_rank = (255, 215, 0) if i == 0 else (200, 200, 200)
-                t_rank  = font_small.render(f"#{i+1}", True, color_rank)
-                t_user  = font_small.render(user,       True, WHITE)
-                t_score = font_small.render(f"{score} pts", True, LIGHT_YELLOW)
-                self.screen.blit(t_rank,  (W // 2 - self._sx(280), start_y + i * row_h))
-                self.screen.blit(t_user,  (W // 2 - self._sx(150), start_y + i * row_h))
-                self.screen.blit(t_score, (W // 2 + self._sx(150), start_y + i * row_h))
+        start_y = panel_y + self._sy(30)
+        username = self.username_text.strip()
 
-        bw, bh = self._sx(450), self._sy(70)
-        btn_volver = pygame.Rect(W // 2 - bw // 2, H - self._sy(120), bw, bh)
+        if not self.scoreboard_data:
+            if self.offline_mode:
+                ph = font_small.render("Tabla no disponible en modo sin conexión", True, (180, 180, 180))
+            else:
+                ph = font_small.render("Cargando datos...", True, (200, 200, 200))
+            self.screen.blit(ph, ph.get_rect(center=(W // 2, panel_y + panel_h // 2)))
+        else:
+            row_h = self._sy(38)
+            for i, (user, score) in enumerate(self.scoreboard_data):
+                is_me = (user == username)
+                if i == 0:
+                    color_rank = (255, 215, 0)
+                elif i == 1:
+                    color_rank = (192, 192, 192)
+                elif i == 2:
+                    color_rank = (205, 127, 50)
+                else:
+                    color_rank = (180, 180, 180)
+
+                # Resaltar la fila del jugador actual
+                if is_me:
+                    row_bg = pygame.Surface((panel_w - self._sx(20), row_h - 2), pygame.SRCALPHA)
+                    row_bg.fill((60, 120, 60, 120))
+                    self.screen.blit(row_bg, (W // 2 - (panel_w - self._sx(20)) // 2,
+                                              start_y + i * row_h - 2))
+
+                name_txt = f"► {user}" if is_me else user
+                txt_color = (120, 255, 120) if is_me else WHITE
+
+                t_rank  = font_small.render(f"#{i+1}", True, color_rank)
+                t_user  = font_small.render(name_txt, True, txt_color)
+                t_score = font_small.render(f"{score} pts", True, LIGHT_YELLOW)
+                self.screen.blit(t_rank,  (W // 2 - self._sx(290), start_y + i * row_h))
+                self.screen.blit(t_user,  (W // 2 - self._sx(160), start_y + i * row_h))
+                self.screen.blit(t_score, (W // 2 + self._sx(100),  start_y + i * row_h))
+
+        # ── Franja personal debajo del panel ───────────────────────────────
+        my_score, my_rank = self._get_my_score_and_rank()
+        personal_y = panel_y + panel_h + self._sy(14)
+        personal_w = panel_w
+        personal_h = self._sy(52)
+        personal_rect = pygame.Rect(W // 2 - personal_w // 2, personal_y,
+                                    personal_w, personal_h)
+        pygame.draw.rect(self.screen, (28, 60, 28), personal_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (60, 160, 60), personal_rect, 2, border_radius=10)
+
+        if username:
+            if my_score is not None:
+                score_txt = f"{my_score} pts"
+            else:
+                score_txt = "Sin puntuación aún"
+
+            if my_rank is not None:
+                rank_txt = f"Tu posición: #{my_rank}"
+            else:
+                rank_txt = "No estás en el top 10"
+
+            line = f"{username}  ·  {score_txt}  ·  {rank_txt}"
+            surf_line = font_info.render(line, True, (180, 255, 180))
+            self.screen.blit(surf_line, surf_line.get_rect(center=personal_rect.center))
+        else:
+            surf_guest = font_info.render("Inicia sesión para ver tu puntuación", True, (180, 180, 180))
+            self.screen.blit(surf_guest, surf_guest.get_rect(center=personal_rect.center))
+
+        # ── Botón volver ───────────────────────────────────────────────────
+        bw, bh = self._sx(450), self._sy(65)
+        btn_volver = pygame.Rect(W // 2 - bw // 2, H - self._sy(110), bw, bh)
         self.draw_modern_button(btn_volver, "Volver al menu", font)
 
         btn_settings = self._draw_settings_icon()
@@ -1277,15 +1373,23 @@ class Engine:
         port = 6667
 
         def _open_socket_and_login():
-            """Abre conexión nueva, manda login, devuelve respuesta. Cierra si falla."""
+            """Abre conexión nueva, manda login, devuelve (sock, respuesta).
+            Lanza excepción si no hay red o la IP no existe — el caller lo maneja."""
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(8)
-            sock.connect((self.host, port))
-            sock.sendall(f"l:{self.username_text}:{self.password_text}\n".encode())
-            return sock, sock.recv(1024).decode().strip()
+            sock.settimeout(2)           # 5 s máx — no bloquear la UI
+            try:
+                sock.connect((self.host, port))
+                sock.sendall(f"l:{self.username_text}:{self.password_text}\n".encode())
+                resp = sock.recv(1024).decode().strip()
+                return sock, resp
+            except Exception:
+                try: sock.close()
+                except: pass
+                raise   # re-lanzar para que el bloque exterior lo capture
+
+        self.network_socket = None      # garantizar estado limpio antes de empezar
 
         try:
-            # Primer intento de login
             sock, resp = _open_socket_and_login()
 
             if resp == "ENTRAR":
@@ -1295,17 +1399,14 @@ class Engine:
                 self.state = "MENU_SELECCION_MODO"
                 return
 
-            # Servidor rechazó: cerrar esta conexión (el servidor ya la cerró por su lado)
+            # Servidor rechazó: cerrar (el servidor ya cerró su lado)
             try: sock.close()
             except: pass
 
             if resp == "INCORRECTO":
-                # Kevin puede existir en offline.json pero no en la BD todavía
                 datos_off = self._load_offline()
                 if datos_off.get("username") == self.username_text:
-                    # Sincronizar: registra al usuario en la BD con su puntuación
                     self._sync_offline_to_server()
-                    # Reintento de login con socket completamente nuevo
                     try:
                         sock2, resp2 = _open_socket_and_login()
                         if resp2 == "ENTRAR":
@@ -1316,11 +1417,10 @@ class Engine:
                             try: sock2.close()
                             except: pass
                             self.login_error_msg = "Contraseña incorrecta"
-                    except:
-                        self.login_error_msg = "Error al reconectar tras sincronizar"
+                    except Exception:
+                        self.login_error_msg = "Sin conexión con el servidor"
                 else:
                     self.login_error_msg = "Contraseña incorrecta"
-
             elif resp == "INSUFICIENTE":
                 self.login_error_msg = "Faltan datos por completar"
             elif resp == "INEXISTENTE":
@@ -1328,24 +1428,44 @@ class Engine:
             else:
                 self.login_error_msg = "Error desconocido del servidor"
 
-        except:
+        except OSError:
+            # OSError cubre: host no encontrado, conexión rechazada, timeout, etc.
+            self.login_error_msg = "No se puede conectar al servidor"
+            self.network_socket = None
+        except Exception:
             self.login_error_msg = "Error al conectar con el servidor"
             self.network_socket = None
 
     def _try_register(self):
         port = 6667
+        sock = None
         try:
-            self.network_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.network_socket.connect((self.host, port))
-            self.network_socket.sendall(f"r:{self.username_text}:{self.password_text}\n".encode())
-            resp = self.network_socket.recv(1024).decode().strip()
-            if   resp == "ENTRAR":
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            sock.connect((self.host, port))
+            sock.sendall(f"r:{self.username_text}:{self.password_text}\n".encode())
+            resp = sock.recv(1024).decode().strip()
+            if resp == "ENTRAR":
+                self.network_socket = sock
                 self.offline_mode = False
                 self._sync_offline_to_server()
                 self.state = "MENU_SELECCION_MODO"
-            elif resp == "EXISTENTE":      self.login_error_msg = "El usuario ya existe"; self.network_socket.close()
-            elif resp == "INSUFICIENTE":   self.login_error_msg = "Faltan datos por completar"; self.network_socket.close()
-            elif resp == "ERROR_SERVIDOR": self.login_error_msg = "Error al registrar el usuario"; self.network_socket.close()
-        except:
+            else:
+                # En cualquier otro caso el socket ya no sirve
+                try: sock.close()
+                except: pass
+                self.network_socket = None
+                if   resp == "EXISTENTE":      self.login_error_msg = "El usuario ya existe"
+                elif resp == "INSUFICIENTE":   self.login_error_msg = "Faltan datos por completar"
+                elif resp == "ERROR_SERVIDOR": self.login_error_msg = "Error al registrar el usuario"
+                else:                          self.login_error_msg = "Respuesta inesperada del servidor"
+        except OSError:
+            try: sock.close() if sock else None
+            except: pass
+            self.network_socket = None
+            self.login_error_msg = "No se puede conectar al servidor"
+        except Exception:
+            try: sock.close() if sock else None
+            except: pass
+            self.network_socket = None
             self.login_error_msg = "Error al conectar con el servidor"
-            if self.network_socket: self.network_socket.close()

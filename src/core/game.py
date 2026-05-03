@@ -115,6 +115,10 @@ class GameSession:
         self._obstacles_cache  = []
         self._ui_fonts         = {}
         self._notifications    = []
+        # Cola de respawns diferidos: lista de tipos de enemigo pendientes de crear
+        self._respawn_queue: list = []
+        # Cuántos enemigos instanciar como máximo por frame desde la cola
+        self._RESPAWNS_PER_FRAME = 2
         # Spatial grid para colisión jugador-obstáculos (cell = 256 px)
         self._obs_cell = 256
         self._obs_grid: dict = {}   # (cx,cy) -> [hit_rect, ...]
@@ -143,6 +147,20 @@ class GameSession:
 
     def _generate_chunk(self, i, j, chunk_size=512):
         """Genera el contenido de un chunk y lo añade a los grupos y al grid."""
+        # En mundos 2 y 3 exigimos que los objetos estén al menos 1 tile (512 px)
+        # fuera de la cámara para evitar pop-in visible.
+        # Calculamos la posición central del chunk y la del jugador para filtrar.
+        chunk_cx = i * chunk_size + chunk_size // 2
+        chunk_cy = j * chunk_size + chunk_size // 2
+        player_x = self.local_player.pos.x
+        player_y = self.local_player.pos.y
+
+        # Distancia mínima desde el jugador para generar objetos (mundos 2 y 3)
+        MIN_DIST_SQ = {1: 0, 2: 900**2, 3: 900**2}.get(self.world, 0)
+        dist_sq = (chunk_cx - player_x) ** 2 + (chunk_cy - player_y) ** 2
+        if dist_sq < MIN_DIST_SQ:
+            return   # chunk demasiado cerca — no generar vegetación/rocas aún
+
         if random.random() < 0.6:
             for _ in range(random.randint(1, 4)):
                 bx = i * chunk_size + random.randint(0, chunk_size)
@@ -237,15 +255,49 @@ class GameSession:
         self.projectiles.update()
         self.exp.update()
 
-        # Marcar enemigos en/fuera de pantalla antes de actualizar
-        # (una sola comparación rect por enemigo — muy barato)
+        # Marcar enemigos en/fuera de pantalla y despawnear los muy lejanos
         W = pygame.display.get_surface().get_width()
         H = pygame.display.get_surface().get_height()
         cam_x = self.local_player.rect.centerx - W // 2
         cam_y = self.local_player.rect.centery - H // 2
+
+        # Rect de visibilidad para animaciones (cámara + 200 px de margen)
         screen_rect = pygame.Rect(cam_x - 200, cam_y - 200, W + 400, H + 400)
-        for enemy in self.enemies:
+
+        # Rect de despawn: cámara + ~2.5 tiles (≈640 px) de margen en cada lado
+        DESPAWN_MARGIN = 640
+        despawn_rect = pygame.Rect(cam_x - DESPAWN_MARGIN, cam_y - DESPAWN_MARGIN,
+                                   W + DESPAWN_MARGIN * 2, H + DESPAWN_MARGIN * 2)
+
+        # Radio mínimo y máximo para el respawn justo fuera de cámara
+        RESPAWN_MIN = max(W, H) // 2 + 350   # justo fuera del borde de pantalla
+        RESPAWN_MAX = RESPAWN_MIN + 300        # hasta ~300 px más lejos
+
+        enemies_to_respawn = []
+        for enemy in list(self.enemies):
             enemy._on_screen = screen_rect.colliderect(enemy.rect)
+            # Solo despawnear enemigos normales (los bosses nunca desaparecen)
+            if not enemy.is_boss_type() and not despawn_rect.colliderect(enemy.rect):
+                enemy.kill()
+                enemies_to_respawn.append(enemy.enemy_type)
+
+        # Meter en la cola — no instanciar aquí para no lagear el frame
+        self._respawn_queue.extend(enemies_to_respawn)
+
+        # Procesar como máximo N respawns por frame para repartir la carga
+        import random as _rnd
+        for _ in range(min(self._RESPAWNS_PER_FRAME, len(self._respawn_queue))):
+            etype = self._respawn_queue.pop(0)
+            angle = _rnd.uniform(0, 360)
+            dist  = _rnd.randint(RESPAWN_MIN, RESPAWN_MAX)
+            offset_vec = pygame.math.Vector2(dist, 0).rotate(angle)
+            new_pos = self.local_player.pos + offset_vec
+            new_enemy = Enemy(target=self.local_player, enemy_type=etype)
+            new_enemy.pos  = pygame.math.Vector2(new_pos)
+            new_enemy.rect.center = new_pos
+            new_enemy.apply_volume_scale(self._volume_factor)
+            self.enemies.add(new_enemy)
+            self.all_sprites.add(new_enemy)
 
         self.enemies.update()
         self.portals.update()

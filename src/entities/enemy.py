@@ -45,7 +45,12 @@ class Enemy(pygame.sprite.Sprite):
 
         # Posición de spawn circular
         boss_types = {"giga_zombie", "yeti", "minotaur", "boss"}
-        spawn_radius = 1100 if enemy_type in boss_types else 900
+        if enemy_type in boss_types:
+            spawn_radius = random.randint(1100, 1400)
+        else:
+            # Mínimo 1000 px — garantiza que spawnea fuera de cámara incluso en
+            # resoluciones altas (1920×1080 → diagonal de semi-pantalla ≈ 960 px)
+            spawn_radius = random.randint(1000, 1300)
         angle = random.uniform(0, 360)
         offset = pygame.math.Vector2(spawn_radius, 0).rotate(angle)
         spawn_pos = target.pos + offset

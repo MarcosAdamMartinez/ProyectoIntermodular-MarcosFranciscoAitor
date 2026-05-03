@@ -524,9 +524,9 @@ class GameSession:
     def _get_spawn_type(self):
         if self.world == 1:
             if self.current_phase == 1:
-                return random.choice(["zombie", "slime"])
+                return random.choice(["slime", "slime"])
             elif self.current_phase == 2:
-                return random.choice(["zombie", "slime", "goblin"])
+                return random.choice(["slime", "goblin"])
             elif self.current_phase == 3:
                 return random.choice(["goblin", "goblin", "slime", "zombie"])
             else:
@@ -540,7 +540,7 @@ class GameSession:
             elif self.current_phase == 3:
                 return random.choice(["golem", "skeleton", "skeleton"])
             else:
-                return random.choice(["skeleton", "golem", "zombie"])
+                return random.choice(["skeleton", "skeleton", "golem", "zombie"])
 
         elif self.world == 3:
             if self.current_phase == 1:

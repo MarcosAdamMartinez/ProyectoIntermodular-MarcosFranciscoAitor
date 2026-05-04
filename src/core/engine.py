@@ -1099,7 +1099,6 @@ class Engine:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_k:
                 self.game.current_phase = 4
                 self.game.spawn_rate = 6
-                self.game.local_player.level = 49
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 self.game.try_summon_boss()
 
@@ -1119,34 +1118,36 @@ class Engine:
             return
         elif estado_juego == "LEVEL_UP":
             self.state = "LEVEL_UP"
-            player     = self.game.local_player
-            char       = getattr(self, "character_name", "caballero")
-            lvl        = player.level
+            player = self.game.local_player
+            char   = getattr(self, "character_name", "caballero")
+            lvl    = player.level
 
             # Comprobar si este nivel es un nivel de desbloqueo de arma
             if lvl in WEAPON_UNLOCK_LEVELS:
-                unlocks    = WEAPON_UNLOCKS.get(lvl, {}).get(char, [])
-                # Filtrar las armas que el jugador aún no tiene
-                owned      = {w.name for w in player.weapons}
-                available  = [w for w in unlocks if w not in owned]
+                unlocks   = WEAPON_UNLOCKS.get(lvl, {}).get(char, [])
+                owned     = {w.name for w in player.weapons}
+                available = [w for w in unlocks if w not in owned]
                 if available:
-                    # Construir opciones de tipo "arma nueva" para el menú
                     self.current_choices = [
                         {"id": f"weapon_{w}", "name": f"Arma: {w.capitalize()}",
                          "desc": "¡Nuevo tipo de ataque!",
                          "type": "new_weapon", "value": w}
                         for w in available
                     ]
-                    # Rellenar hasta 3 con mejoras normales si sobran huecos
                     if len(self.current_choices) < 3:
-                        extras = [u for u in UPGRADES
-                                  if u not in self.current_choices]
+                        extras = [u for u in UPGRADES if u not in self.current_choices]
                         self.current_choices += random.sample(
                             extras, min(3 - len(self.current_choices), len(extras)))
-                else:
-                    self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
-            else:
-                self.current_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+                    return
+                # Si ya las tiene todas, cae al pool normal
+
+            # Pool normal: mejoras globales + mejoras de armas que posee el jugador
+            owned_names  = {w.name for w in player.weapons}
+            weapon_pool  = [upg for wname, upgrades in WEAPON_UPGRADES.items()
+                            if wname in owned_names for upg in upgrades]
+            global_pool  = list(UPGRADES)
+            combined     = global_pool + weapon_pool
+            self.current_choices = random.sample(combined, min(3, len(combined)))
         elif estado_juego == "NEXT_WORLD":
             next_world = self.game.world + 1
             if next_world <= 3:
@@ -1267,11 +1268,21 @@ class Engine:
         UPGRADE_ICONS = {
             "max_hp":     ("assets/sprites/icons/hp_up.png",     "",  (200,  40,  40)),
             "speed":      ("assets/sprites/icons/speed_up.png",  "",  ( 60, 160, 255)),
-            "damage":     ("assets/sprites/icons/dmg_up.png",    "",  (255, 120,  30)),
-            "cooldown":   ("assets/sprites/icons/cd_down.png",   "",  (255, 200,   0)),
             "magnet":     ("assets/sprites/icons/magnet_up.png", "",  (120,  80, 220)),
             "hp":         ("assets/sprites/icons/heal_up.png",   "",  ( 50, 200, 100)),
             "new_weapon": ("",                                    "⚔", (220, 180,  40)),
+            # Mejoras de arma — el icono es el sprite del arma correspondiente
+            "w_damage":   ("",  "", (255, 120,  30)),
+            "w_cooldown": ("",  "", (255, 200,   0)),
+            "w_burn_dmg": ("",  "", (255,  80,   0)),
+            "w_burn_rad": ("",  "", (255, 140,  20)),
+            "w_frags":    ("",  "", (255, 220,   0)),
+        }
+
+        WEAPON_ICON_PATHS = {
+            "espada": "assets/sprites/icons/sword_icon.png",
+            "varita": "assets/sprites/icons/wand_icon.png",
+            "banana": "assets/sprites/icons/banana_icon.png",
         }
 
         # ── Layout de tarjetas ────────────────────────────────────────────────
@@ -1315,6 +1326,11 @@ class Engine:
             icon_y    = rect.y + self._sy(22)
             icon_rect = pygame.Rect(rect.centerx - icon_size // 2, icon_y, icon_size, icon_size)
 
+            # Para mejoras de arma, el icono principal ES el icono del arma
+            weapon_name = upgrade.get("weapon")
+            if weapon_name:
+                icon_path = WEAPON_ICON_PATHS.get(weapon_name, "")
+
             icon_loaded = False
             if icon_path and os.path.exists(icon_path):
                 try:
@@ -1350,6 +1366,14 @@ class Engine:
             # Descripción
             desc_surf = font_desc.render(upgrade["desc"], True, (210, 210, 230))
             self.screen.blit(desc_surf, desc_surf.get_rect(centerx=rect.centerx, y=text_y))
+
+            # Etiqueta del arma debajo de la descripción
+            if upgrade.get("weapon"):
+                badge_font = pygame.font.SysFont("Arial", self._sf(13), bold=True)
+                badge_surf = badge_font.render(upgrade["weapon"].upper(), True, accent)
+                self.screen.blit(badge_surf, badge_surf.get_rect(
+                    centerx=rect.centerx,
+                    bottom=rect.bottom - self._sy(10)))
 
             # Label hover al fondo
             if hov:

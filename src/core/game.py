@@ -9,7 +9,7 @@ from src.entities.bush import Bush
 from src.entities.rock import Rock
 from src.entities.portal import Portal
 from src.entities.pedestal import Pedestal, PEDESTAL_SPAWN_RADIUS_TILES, PEDESTAL_BOSS_NAMES
-from src.entities.projectile import BurnZone
+from src.entities.projectile import BurnZone, BananaFrag
 from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE, BORDER_GREEN
 
 # Colores de fondo por mundo
@@ -85,7 +85,8 @@ class GameSession:
         self.portals    = pygame.sprite.Group()
         self.rocks      = pygame.sprite.Group()
         self.bushes     = pygame.sprite.Group()
-        self.burn_zones = pygame.sprite.Group()
+        self.burn_zones   = pygame.sprite.Group()
+        self.banana_frags = pygame.sprite.Group()
         self.pedestals  = pygame.sprite.Group()
 
         if carry_player is not None:
@@ -305,19 +306,33 @@ class GameSession:
         self.portals.update()
         self.pedestals.update()
         self.burn_zones.update()
+        self.banana_frags.update()
 
         # Daño de quemadura por tick
         for bz in list(self.burn_zones):
-            if bz.tick == 0:   # justo tras resetear hit_enemies en update()
+            if bz.tick == 0:
                 for enemy in list(self.enemies):
                     if enemy in bz.hit_enemies:
                         continue
                     dx = enemy.pos.x - bz.pos.x
                     dy = enemy.pos.y - bz.pos.y
-                    if dx*dx + dy*dy <= BurnZone.RADIUS ** 2:
-                        if enemy.take_damage(BurnZone.BURN_DAMAGE):
+                    if dx*dx + dy*dy <= bz.radius ** 2:
+                        if enemy.take_damage(bz.burn_damage):
                             self.on_enemy_killed(enemy)
                         bz.hit_enemies.append(enemy)
+
+        # Daño de fragmentos de banana
+        frag_hits = pygame.sprite.groupcollide(
+            self.enemies, self.banana_frags, False, False,
+            collided=pygame.sprite.collide_rect_ratio(0.5))
+        for enemy, frags in frag_hits.items():
+            for frag in frags:
+                if enemy not in frag.hit_enemies:
+                    killed = enemy.take_damage(frag.damage)
+                    frag.hit_enemies.append(enemy)
+                    if killed:
+                        self.on_enemy_killed(enemy)
+                        break   # enemigo muerto — no procesar más frags contra él
 
         # Detectar pedestal más cercano en zona de interacción
         self._near_pedestal = None
@@ -521,13 +536,33 @@ class GameSession:
                         if enemy.take_damage(proj.damage):
                             self.on_enemy_killed(enemy)
                         proj.hit_enemies.append(enemy)
+
+                        # Fragmentos de banana al PRIMER enemigo golpeado
+                        if getattr(proj, 'is_boomerang', False) and not proj.fragmented:
+                            proj.fragmented = True
+                            n_frags = proj.stats.get("frags", 2)
+                            spread  = 60   # ángulo total de dispersión en grados
+                            for k in range(n_frags):
+                                if n_frags > 1:
+                                    angle_off = -spread / 2 + spread * k / (n_frags - 1)
+                                else:
+                                    angle_off = 0
+                                frag_dir = proj.direction.rotate(angle_off)
+                                frag = BananaFrag(proj.pos, frag_dir,
+                                                  proj.damage // 2 or 1, proj.stats)
+                                self.banana_frags.add(frag)
+                                self.all_sprites.add(frag)
                 else:
                     killed = enemy.take_damage(proj.damage)
                     if killed:
                         self.on_enemy_killed(enemy)
-                    # Crear zona de quemadura si el arma tiene la flag "burn"
+                    # BurnZone con radio y daño de las stats del arma
                     if proj.stats.get("burn"):
-                        bz = BurnZone(proj.pos)
+                        bz = BurnZone(
+                            proj.pos,
+                            burn_damage=proj.stats.get("burn_damage", 3),
+                            burn_radius=proj.stats.get("burn_radius", 35),
+                        )
                         self.burn_zones.add(bz)
                         self.all_sprites.add(bz)
                     proj.kill()

@@ -58,9 +58,11 @@ CHARACTERS = {
 
 # DATOS DE ARMAS
 WEAPONS = {
-    "espada": {"cooldown": 20, "damage": 100, "speed": 0, "color": WHITE, "type": "melee", "melee": True},
-    "varita": {"cooldown": 45, "damage": 10,  "speed": 10, "color": YELLOW, "type": "ranged", "burn": True},
-    "banana": {"cooldown": 30, "damage": 10,  "speed": 7,  "color": YELLOW, "type": "banana", "boomerang": True}
+    "espada": {"cooldown": 20, "damage": 100, "speed": 0,  "color": WHITE,  "type": "melee",  "melee": True},
+    "varita": {"cooldown": 45, "damage": 10,  "speed": 10, "color": YELLOW, "type": "ranged", "burn": True,
+               "burn_damage": 3, "burn_radius": 35},
+    "banana": {"cooldown": 30, "damage": 10,  "speed": 7,  "color": YELLOW, "type": "banana", "boomerang": True,
+               "frags": 2},
 }
 
 # Qué arma desbloquea cada personaje al alcanzar los niveles especiales
@@ -100,21 +102,48 @@ ENEMY_CONTACT_DAMAGE = {
 UPGRADES = [
     {"id": "hp_up",      "name": "Corazon Fuerte",  "desc": "+20 Vida Maxima",               "type": "max_hp",  "value": 20},
     {"id": "speed_up",   "name": "Botas Ligeras",    "desc": "+1 Velocidad de movimiento",    "type": "speed",   "value": 1},
-    {"id": "dmg_up",     "name": "Fuerza Bruta",     "desc": "+5 de daño a todas las armas",  "type": "damage",  "value": 5},
-    {"id": "cd_down",    "name": "Manos Rapidas",    "desc": "Disparas mas rapido",            "type": "cooldown","value": 0.85},
     {"id": "magnet_up",  "name": "Iman Magico",      "desc": "+60 Rango de recogida",         "type": "magnet",  "value": 60},
     {"id": "health_up",  "name": "Beso de la Diosa", "desc": "+40 Vida",                      "type": "hp",      "value": 40}
 ]
 
+# Mejoras específicas por arma — se mezclan con UPGRADES en el menú de subida
+# Cada entrada lleva "weapon" (nombre del arma a la que aplica) y el icono se
+# muestra junto al sprite del arma para que quede claro a qué afecta.
+WEAPON_UPGRADES = {
+    "espada": [
+        {"id": "sword_dmg",  "weapon": "espada", "name": "Filo Afilado",    "desc": "+20 daño de espada",       "type": "w_damage",   "value": 20},
+        {"id": "sword_cd",   "weapon": "espada", "name": "Estocada Rapida", "desc": "Espada 15% más rápida",    "type": "w_cooldown", "value": 0.85},
+    ],
+    "varita": [
+        {"id": "wand_dmg",    "weapon": "varita", "name": "Magia Potente",   "desc": "+5 daño de varita",         "type": "w_damage",     "value": 5},
+        {"id": "wand_cd",     "weapon": "varita", "name": "Cadencia Arcana", "desc": "Varita 15% más rápida",     "type": "w_cooldown",   "value": 0.85},
+        {"id": "burn_dmg",    "weapon": "varita", "name": "Llama Voraz",     "desc": "+2 daño de quemadura/tick", "type": "w_burn_dmg",   "value": 2},
+        {"id": "burn_rad",    "weapon": "varita", "name": "Hoguera",         "desc": "+15 radio de quemadura",    "type": "w_burn_rad",   "value": 15},
+    ],
+    "banana": [
+        {"id": "ban_dmg",   "weapon": "banana", "name": "Banana Madura",   "desc": "+5 daño de banana",          "type": "w_damage",   "value": 5},
+        {"id": "ban_cd",    "weapon": "banana", "name": "Manos de Mono",   "desc": "Banana 15% más rápida",      "type": "w_cooldown", "value": 0.85},
+        {"id": "ban_frags", "weapon": "banana", "name": "Racimo",          "desc": "+1 fragmento al impactar",   "type": "w_frags",    "value": 1},
+    ],
+}
+
 def load_sprite(path, size, fallback_color, remove_bg=True):
-    """Carga una imagen, quita el fondo si se pide, o devuelve un cuadrado si no existe."""
+    """Carga una imagen y la escala. Preserva transparencia alfa correctamente."""
     if os.path.exists(path):
         image = pygame.image.load(path).convert_alpha()
+        # Solo usar colorkey si la imagen NO tiene canal alfa real
+        # (imágenes con alfa propio ya tienen transparencia sin necesitar colorkey)
         if remove_bg:
-            background_color = image.get_at((0, 0))
-            image.set_colorkey(background_color)
-        return pygame.transform.scale(image, size)
+            # Comprobar si el pixel (0,0) tiene alfa = 255 (sin transparencia propia)
+            # Solo en ese caso aplicar colorkey para quitar el fondo de color sólido
+            px = image.get_at((0, 0))
+            if px.a == 255:
+                image.set_colorkey((px.r, px.g, px.b))
+        scaled = pygame.Surface(size, pygame.SRCALPHA)
+        tmp = pygame.transform.scale(image, size)
+        scaled.blit(tmp, (0, 0))
+        return scaled
     else:
-        surf = pygame.Surface(size)
-        surf.fill(fallback_color)
+        surf = pygame.Surface(size, pygame.SRCALPHA)
+        surf.fill((*fallback_color, 255))
         return surf

@@ -1,6 +1,8 @@
 import pygame
 import math
+import random
 from src.utils.settings import load_sprite
+
 
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, pos, direction, stats, owner):
@@ -12,6 +14,7 @@ class Projectile(pygame.sprite.Sprite):
         self.is_melee = stats.get("melee", False)
         self.returning = False
         self.hit_enemies = []
+        self.fragmented = False   # boomerang: fragmenta solo una vez
 
         self.speed = stats["speed"]
         self.damage = stats["damage"]
@@ -26,10 +29,12 @@ class Projectile(pygame.sprite.Sprite):
         else:
             w_size = (70, 70)
 
-        self.original_image = load_sprite(f"assets/sprites/weapons/{stats['type']}.png", w_size, stats["color"])
+        self.original_image = load_sprite(
+            f"assets/sprites/weapons/{stats['type']}.png", w_size, stats["color"])
 
         if self.is_melee:
-            self.original_image = load_sprite(f"assets/sprites/weapons/melee.png", w_size, stats["color"])
+            self.original_image = load_sprite(
+                f"assets/sprites/weapons/melee.png", w_size, stats["color"])
             self.base_angle = math.degrees(math.atan2(-direction.y, direction.x))
             self.current_angle = self.base_angle + 45
             self.sweep_speed = -3
@@ -76,65 +81,101 @@ class Projectile(pygame.sprite.Sprite):
                 self.kill()
             self.rect.center = self.pos
 
+
+class BananaFrag(pygame.sprite.Sprite):
+    """
+    Fragmento de banana lanzado al impactar el boomerang por primera vez.
+    Sale disparado hacia adelante (misma dirección del boomerang) y vuelve
+    al punto de impacto, no al lanzador.
+    """
+    SPEED    = 9
+    LIFETIME = 22
+
+    def __init__(self, impact_pos, direction, damage, stats):
+        super().__init__()
+        self.damage      = damage
+        self.stats       = stats
+        self.hit_enemies = []
+        self.impact_pos  = pygame.math.Vector2(impact_pos)
+        self.pos         = pygame.math.Vector2(impact_pos)
+        self.direction   = direction.normalize() if direction.length() > 0 else pygame.math.Vector2(1, 0)
+        self.returning   = False
+        self.lifetime    = self.LIFETIME
+
+        w_size = (32, 32)
+        self.original_image = load_sprite("assets/sprites/weapons/banana.png", w_size, (255, 220, 0))
+        angle = math.degrees(math.atan2(-self.direction.y, self.direction.x))
+        self.image = pygame.transform.rotate(self.original_image, angle)
+        self.rect  = self.image.get_rect(center=(int(impact_pos[0]), int(impact_pos[1])))
+
+    def update(self):
+        if not self.returning:
+            self.pos += self.direction * self.SPEED
+            self.lifetime -= 1
+            if self.lifetime <= 0:
+                self.returning = True
+        else:
+            ret = self.impact_pos - self.pos
+            if ret.length() < self.SPEED + 5:
+                self.kill()
+                return
+            self.pos += ret.normalize() * (self.SPEED + 2)
+        self.rect.center = self.pos
+
+
 class BurnZone(pygame.sprite.Sprite):
     """
-    Área de quemadura que deja la varita al impactar.
-    Círculo naranja semitransparente con borde sólido.
-    Dura ~60 frames (1 segundo a 60 fps) y aplica daño periódico.
+    Área de quemadura de la varita.
+    Radio y daño vienen de las stats del arma para que las mejoras
+    individuales (w_burn_rad, w_burn_dmg) se reflejen correctamente.
     """
-    RADIUS      = 35       # radio en píxeles — modifica aquí para ajustar el área
-    DURATION    = 60       # frames de vida (60 = 1 segundo)
-    TICK_RATE   = 10       # frames entre cada tick de daño
-    BURN_DAMAGE = 3        # daño por tick
+    DURATION  = 60
+    TICK_RATE = 10
 
-    # Colores
-    COLOR_FILL   = (255, 120, 20)   # naranja interior
-    COLOR_BORDER = (255, 60,  0)    # naranja oscuro borde
-    FILL_ALPHA   = 90               # opacidad del relleno (0-255)
+    COLOR_FILL   = (255, 120, 20)
+    COLOR_BORDER = (255, 60,  0)
+    FILL_ALPHA   = 90
 
-    def __init__(self, pos):
+    def __init__(self, pos, burn_damage=3, burn_radius=35):
         super().__init__()
-        self.pos      = pygame.math.Vector2(pos)
-        self.timer    = 0
-        self.tick     = 0
-        self.hit_enemies = []       # enemigos ya dañados en este tick
+        self.pos         = pygame.math.Vector2(pos)
+        self.burn_damage = burn_damage
+        self.radius      = burn_radius
+        self.timer       = 0
+        self.tick        = 0
+        self.hit_enemies = []
 
-        d = self.RADIUS * 2
+        d = self.radius * 2
         self.image = pygame.Surface((d, d), pygame.SRCALPHA)
-        self._draw()
+        self._redraw(255)
         self.rect = self.image.get_rect(center=(int(pos[0]), int(pos[1])))
 
-    def _draw(self):
+    def _redraw(self, alpha_scale):
+        d = self.radius * 2
+        if self.image.get_size() != (d, d):
+            self.image = pygame.Surface((d, d), pygame.SRCALPHA)
         self.image.fill((0, 0, 0, 0))
-        r   = self.RADIUS
-        cx  = cy = r
-
-        # Relleno semitransparente
-        fill_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-        pygame.draw.circle(fill_surf, (*self.COLOR_FILL, self.FILL_ALPHA), (r, r), r)
+        r = self.radius
+        fill_alpha   = int(self.FILL_ALPHA * alpha_scale / 255)
+        border_alpha = alpha_scale
+        fill_surf = pygame.Surface((d, d), pygame.SRCALPHA)
+        pygame.draw.circle(fill_surf, (*self.COLOR_FILL, fill_alpha), (r, r), r)
         self.image.blit(fill_surf, (0, 0))
-
-        # Borde sólido
-        pygame.draw.circle(self.image, (*self.COLOR_BORDER, 255), (cx, cy), r, 3)
+        pygame.draw.circle(self.image, (*self.COLOR_BORDER, border_alpha), (r, r), r, 3)
 
     def update(self):
         self.timer += 1
         self.tick  += 1
 
-        # Fade out en el último tercio de vida
-        if self.timer > self.DURATION * 2 // 3:
-            remaining = self.DURATION - self.timer
-            alpha = max(0, int(255 * remaining / (self.DURATION // 3)))
-            self.image.fill((0, 0, 0, 0))
-            r = self.RADIUS
-            fill_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(fill_surf, (*self.COLOR_FILL, int(self.FILL_ALPHA * alpha / 255)), (r, r), r)
-            self.image.blit(fill_surf, (0, 0))
-            pygame.draw.circle(self.image, (*self.COLOR_BORDER, alpha), (r, r), r, 3)
+        fade_start = self.DURATION * 2 // 3
+        if self.timer > fade_start:
+            remaining   = max(0, self.DURATION - self.timer)
+            alpha_scale = int(255 * remaining / max(1, self.DURATION - fade_start))
+            self._redraw(alpha_scale)
 
         if self.tick >= self.TICK_RATE:
             self.tick = 0
-            self.hit_enemies.clear()   # resetear para el siguiente tick
+            self.hit_enemies.clear()
 
         if self.timer >= self.DURATION:
             self.kill()

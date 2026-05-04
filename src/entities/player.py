@@ -114,26 +114,41 @@ class Player(pygame.sprite.Sprite):
         self.pending_level_ups += 1
 
     def apply_upgrade(self, upgrade):
-        if upgrade["type"] == "max_hp":
+        utype = upgrade["type"]
+
+        # ── Mejoras globales de jugador ───────────────────────────────────────
+        if utype == "max_hp":
             self.max_hp += upgrade["value"]
             self.hp     += upgrade["value"]
-        elif upgrade["type"] == "speed":
+        elif utype == "speed":
             self.speed += upgrade["value"]
-        elif upgrade["type"] == "damage":
-            for weapon in self.weapons:
-                weapon.stats["damage"] += upgrade["value"]
-        elif upgrade["type"] == "cooldown":
-            for weapon in self.weapons:
-                weapon.stats["cooldown"] = max(10, int(weapon.stats["cooldown"] * upgrade["value"]))
-        elif upgrade["type"] == "magnet":
+        elif utype == "magnet":
             self.magnet_radius += upgrade["value"]
-        elif upgrade["type"] == "hp":
-            if not self.hp + upgrade["value"] > self.max_hp:
-                self.hp += upgrade["value"]
-            else:
-                self.hp = self.max_hp
-        elif upgrade["type"] == "new_weapon":
+        elif utype == "hp":
+            self.hp = min(self.hp + upgrade["value"], self.max_hp)
+        elif utype == "new_weapon":
             weapon_name = upgrade["value"]
-            owned = {w.name for w in self.weapons}
-            if weapon_name not in owned:
+            if weapon_name not in {w.name for w in self.weapons}:
                 self.add_weapon(weapon_name)
+
+        # ── Mejoras específicas por arma ──────────────────────────────────────
+        elif utype == "w_damage":
+            for w in self.weapons:
+                if w.name == upgrade.get("weapon"):
+                    w.stats["damage"] += upgrade["value"]
+        elif utype == "w_cooldown":
+            for w in self.weapons:
+                if w.name == upgrade.get("weapon"):
+                    w.stats["cooldown"] = max(10, int(w.stats["cooldown"] * upgrade["value"]))
+        elif utype == "w_burn_dmg":
+            for w in self.weapons:
+                if w.name == upgrade.get("weapon"):
+                    w.stats["burn_damage"] = w.stats.get("burn_damage", 3) + upgrade["value"]
+        elif utype == "w_burn_rad":
+            for w in self.weapons:
+                if w.name == upgrade.get("weapon"):
+                    w.stats["burn_radius"] = w.stats.get("burn_radius", 35) + upgrade["value"]
+        elif utype == "w_frags":
+            for w in self.weapons:
+                if w.name == upgrade.get("weapon"):
+                    w.stats["frags"] = w.stats.get("frags", 2) + upgrade["value"]

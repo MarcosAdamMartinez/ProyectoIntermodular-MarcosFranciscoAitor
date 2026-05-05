@@ -12,25 +12,25 @@ class Enemy(pygame.sprite.Sprite):
 
         # Estadísticas y tamaño según tipo
         if enemy_type == "zombie":
-            size = (70, 60);   color = RED;              self.speed = random.uniform(1.5, 2.5);  self.hp = 20
+            size = (70, 60);   color = RED;              self.speed = random.uniform(1.5, 2.5);  self.hp = 100
         elif enemy_type == "slime":
-            size = (80, 70);   color = (0, 200, 100);   self.speed = random.uniform(1.2, 2.0);  self.hp = 12
+            size = (80, 70);   color = (0, 200, 100);   self.speed = random.uniform(1.2, 2.0);  self.hp = 30
         elif enemy_type == "goblin":
-            size = (70, 60);   color = (0, 150, 0);     self.speed = random.uniform(2.0, 3.0);  self.hp = 45
+            size = (70, 60);   color = (0, 150, 0);     self.speed = random.uniform(2.0, 3.0);  self.hp = 90
         elif enemy_type == "skeleton":
-            size = (70, 60);   color = (200, 200, 200); self.speed = random.uniform(2.5, 3.5);  self.hp = 80
+            size = (70, 60);   color = (200, 200, 200); self.speed = random.uniform(2.5, 3.5);  self.hp = 120
         elif enemy_type == "golem":
-            size = (90, 90);   color = (100, 80, 60);   self.speed = random.uniform(1.0, 1.8);  self.hp = 180
+            size = (90, 90);   color = (100, 80, 60);   self.speed = random.uniform(1.0, 1.8);  self.hp = 280
         elif enemy_type == "bat":
-            size = (80, 80);   color = (80, 0, 80);     self.speed = random.uniform(3.0, 4.5);  self.hp = 30
+            size = (80, 80);   color = (80, 0, 80);     self.speed = random.uniform(3.0, 4.5);  self.hp = 70
         elif enemy_type == "demon":
-            size = (110, 110); color = (180, 20, 20);   self.speed = random.uniform(2.5, 3.5);  self.hp = 150
+            size = (110, 110); color = (180, 20, 20);   self.speed = random.uniform(2.5, 3.5);  self.hp = 300
         elif enemy_type == "giga_zombie":
-            size = (170, 170); color = (180, 30, 0);    self.speed = random.uniform(1.0, 1.5);  self.hp = 500
+            size = (170, 170); color = (180, 30, 0);    self.speed = random.uniform(1.0, 1.5);  self.hp = 10000
         elif enemy_type == "yeti":
-            size = (170, 170); color = (200, 230, 255); self.speed = random.uniform(1.2, 1.8);  self.hp = 700
+            size = (170, 170); color = (200, 230, 255); self.speed = random.uniform(1.2, 1.8);  self.hp = 20000
         elif enemy_type == "minotaur":
-            size = (200, 200); color = (120, 40, 10);   self.speed = random.uniform(1.5, 2.2);  self.hp = 1000
+            size = (200, 200); color = (120, 40, 10);   self.speed = random.uniform(1.5, 2.2);  self.hp = 30000
         else:  # boss genérico
             size = (200, 200); color = (150, 0, 0);     self.speed = random.uniform(1.0, 1.5);  self.hp = 500
 

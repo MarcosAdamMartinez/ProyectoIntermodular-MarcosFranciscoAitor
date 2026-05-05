@@ -29,7 +29,8 @@ class Engine:
 
         self.music_state    = "NONE"
         self.state          = "MENU_PRINCIPAL"
-        self.current_choices = []
+        self.current_choices     = []
+        self.pending_chest_upgrade = None   # mejora pendiente del cofre abierto
 
         # Variables de inicio de sesión
         self.username_text  = ""
@@ -78,7 +79,7 @@ class Engine:
         self._load_assets()
 
         self.network_socket = None
-        self.host = "18.202.57.121"
+        self.host = "3.250.15.37"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
@@ -297,6 +298,7 @@ class Engine:
             elif self.state == "PLAYING":                 self.game_loop()
             elif self.state == "GAME_OVER":               self.game_over_loop()
             elif self.state == "LEVEL_UP":                self.level_up_loop()
+            elif self.state == "CHEST_REWARD":            self.chest_reward_loop()
 
     # ─────────────────────────────────────────────────────────────────────────
     # MENÚ PRINCIPAL
@@ -727,7 +729,7 @@ class Engine:
                 "key":   "caballero",
                 "name":  "Caballero",
                 "desc":  "Guerrero resistente con\nalto aguante en combate",
-                "stats": ["Vida: 150", "Vel: 4", "Espada"],
+                "stats": ["Vida: 250", "Vel: 4", "Espada"],
                 "icon":  "assets/sprites/icons/knight_icon.png",
                 "color": (60, 100, 200),
                 "accent": (100, 160, 255),
@@ -736,7 +738,7 @@ class Engine:
                 "key":   "mago",
                 "name":  "Mago",
                 "desc":  "Veloz lanzador de hechizos\ncon gran movilidad",
-                "stats": ["Vida: 80", "Vel: 6", "Varita"],
+                "stats": ["Vida: 120", "Vel: 6", "Varita"],
                 "icon":  "assets/sprites/icons/mage_icon.png",
                 "color": (100, 30, 180),
                 "accent": (180, 80, 255),
@@ -745,7 +747,7 @@ class Engine:
                 "key":   "my_uncle",
                 "name":  "Mi Tío",
                 "desc":  "Personaje misterioso que\nlanza plátanos como armas",
-                "stats": ["Vida: 100", "Vel: 5", "Banana"],
+                "stats": ["Vida: 160", "Vel: 5", "Banana"],
                 "icon":  "assets/sprites/icons/my_uncle_icon.png",
                 "color": (120, 90, 30),
                 "accent": (220, 180, 60),
@@ -1101,6 +1103,10 @@ class Engine:
                 self.game.spawn_rate = 6
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 self.game.try_summon_boss()
+                upgrade = self.game.open_chest()
+                if upgrade is not None:
+                    self.pending_chest_upgrade = upgrade
+                    self.state = "CHEST_REWARD"
 
         estado_juego = self.game.update(self.username_text, self.network_socket)
 
@@ -1120,34 +1126,32 @@ class Engine:
             self.state = "LEVEL_UP"
             player = self.game.local_player
             char   = getattr(self, "character_name", "caballero")
-            lvl    = player.level
 
-            # Comprobar si este nivel es un nivel de desbloqueo de arma
-            if lvl in WEAPON_UNLOCK_LEVELS:
-                unlocks   = WEAPON_UNLOCKS.get(lvl, {}).get(char, [])
-                owned     = {w.name for w in player.weapons}
-                available = [w for w in unlocks if w not in owned]
-                if available:
-                    self.current_choices = [
-                        {"id": f"weapon_{w}", "name": f"Arma: {w.capitalize()}",
-                         "desc": "¡Nuevo tipo de ataque!",
-                         "type": "new_weapon", "value": w}
-                        for w in available
-                    ]
-                    if len(self.current_choices) < 3:
-                        extras = [u for u in UPGRADES if u not in self.current_choices]
-                        self.current_choices += random.sample(
-                            extras, min(3 - len(self.current_choices), len(extras)))
-                    return
-                # Si ya las tiene todas, cae al pool normal
+            owned_names     = {w.name for w in player.weapons}
+            all_unlockable  = WEAPON_UNLOCKS.get(
+                max(WEAPON_UNLOCK_LEVELS), {}).get(char, [])
+            unowned_weapons = [w for w in all_unlockable if w not in owned_names]
 
-            # Pool normal: mejoras globales + mejoras de armas que posee el jugador
-            owned_names  = {w.name for w in player.weapons}
-            weapon_pool  = [upg for wname, upgrades in WEAPON_UPGRADES.items()
-                            if wname in owned_names for upg in upgrades]
-            global_pool  = list(UPGRADES)
-            combined     = global_pool + weapon_pool
-            self.current_choices = random.sample(combined, min(3, len(combined)))
+            # 5% de probabilidad de ofrecer un arma nueva si quedan por desbloquear
+            if unowned_weapons and random.random() < 0.05:
+                weapon_choice = random.choice(unowned_weapons)
+                weapon_option = {
+                    "id": f"weapon_{weapon_choice}",
+                    "name": f"Arma: {weapon_choice.capitalize()}",
+                    "desc": "¡Nuevo tipo de ataque!",
+                    "type": "new_weapon", "value": weapon_choice
+                }
+                weapon_pool = [upg for wname, upgrades in WEAPON_UPGRADES.items()
+                               if wname in owned_names for upg in upgrades]
+                rest_pool   = list(UPGRADES) + weapon_pool
+                rest = random.sample(rest_pool, min(2, len(rest_pool)))
+                self.current_choices = [weapon_option] + rest
+            else:
+                # Pool normal: mejoras globales + mejoras de armas que posee el jugador
+                weapon_pool = [upg for wname, upgrades in WEAPON_UPGRADES.items()
+                               if wname in owned_names for upg in upgrades]
+                combined    = list(UPGRADES) + weapon_pool
+                self.current_choices = random.sample(combined, min(3, len(combined)))
         elif estado_juego == "NEXT_WORLD":
             next_world = self.game.world + 1
             if next_world <= 3:
@@ -1391,6 +1395,102 @@ class Engine:
                 self.state = "PLAYING"
                 pygame.display.flip()
                 return
+
+        pygame.display.flip()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # RECOMPENSA DE COFRE
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def chest_reward_loop(self):
+        W, H = self.W, self.H
+        upgrade = self.pending_chest_upgrade
+        if upgrade is None:
+            self.state = "PLAYING"
+            return
+
+        # Fondo: juego congelado + overlay oscuro
+        self.game.draw(self.screen)
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        self.screen.blit(overlay, (0, 0))
+
+        font_title = pygame.font.SysFont("Arial", self._sf(38), bold=True)
+        font_name  = pygame.font.SysFont("Arial", self._sf(30), bold=True)
+        font_desc  = pygame.font.SysFont("Arial", self._sf(22))
+        font_btn   = pygame.font.SysFont("Arial", self._sf(28), bold=True)
+
+        # Título
+        title_surf = font_title.render("¡Cofre encontrado!", True, (255, 215, 0))
+        self.screen.blit(title_surf, title_surf.get_rect(center=(W // 2, H // 2 - self._sy(210))))
+
+        # Tarjeta centrada — mismo estilo que level_up_loop
+        UPGRADE_ICONS = {
+            "max_hp":  ("assets/sprites/icons/hp_up.png",     (200,  40,  40)),
+            "speed":   ("assets/sprites/icons/speed_up.png",  ( 60, 160, 255)),
+            "magnet":  ("assets/sprites/icons/magnet_up.png", (120,  80, 220)),
+            "hp":      ("assets/sprites/icons/heal_up.png",   ( 50, 200, 100)),
+        }
+        icon_path, accent = UPGRADE_ICONS.get(upgrade.get("type", ""), ("", (180, 180, 50)))
+
+        card_w = self._sx(360)
+        card_h = self._sy(310)
+        card_x = W // 2 - card_w // 2
+        card_y = H // 2 - card_h // 2 - self._sy(30)
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+
+        # Sombra
+        pygame.draw.rect(self.screen, (8, 8, 12), card_rect.move(0, 7), border_radius=18)
+
+        # Fondo de tarjeta
+        card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        r, g, b = accent
+        card_surf.fill((max(r - 60, 0), max(g - 60, 0), max(b - 60, 0), 210))
+        self.screen.blit(card_surf, card_rect.topleft)
+        pygame.draw.rect(self.screen, accent, card_rect, 3, border_radius=18)
+
+        # Icono
+        icon_size = self._sx(90)
+        icon_rect = pygame.Rect(W // 2 - icon_size // 2,
+                                card_y + self._sy(25), icon_size, icon_size)
+        icon_loaded = False
+        if icon_path and os.path.exists(icon_path):
+            try:
+                ic = pygame.image.load(icon_path).convert_alpha()
+                ic = pygame.transform.scale(ic, (icon_size, icon_size))
+                self.screen.blit(ic, icon_rect.topleft)
+                icon_loaded = True
+            except Exception:
+                pass
+        if not icon_loaded:
+            pygame.draw.circle(self.screen, accent, icon_rect.center, icon_size // 2)
+            pygame.draw.circle(self.screen, (255, 255, 255), icon_rect.center, icon_size // 2, 2)
+
+        # Nombre y descripción
+        name_surf = font_name.render(upgrade.get("name", "Mejora"), True, (255, 255, 255))
+        desc_surf = font_desc.render(upgrade.get("desc", ""),       True, (210, 210, 230))
+        self.screen.blit(name_surf, name_surf.get_rect(center=(W // 2, card_y + self._sy(145))))
+        self.screen.blit(desc_surf, desc_surf.get_rect(center=(W // 2, card_y + self._sy(190))))
+
+        # Botón Aceptar
+        bw, bh = self._sx(300), self._sy(62)
+        btn = pygame.Rect(W // 2 - bw // 2, card_y + card_h + self._sy(20), bw, bh)
+        self.draw_modern_button(btn, "Aceptar", font_btn, accent)
+
+        mouse_pos = pygame.mouse.get_pos()
+        clicked   = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self._quit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                clicked = True
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                clicked = True   # también con E
+
+        if clicked and btn.collidepoint(mouse_pos) or (clicked and pygame.key.get_pressed()[pygame.K_e]):
+            self.game.local_player.apply_upgrade(upgrade)
+            self.pending_chest_upgrade = None
+            self.state = "PLAYING"
 
         pygame.display.flip()
 

@@ -10,7 +10,8 @@ from src.entities.rock import Rock
 from src.entities.portal import Portal
 from src.entities.pedestal import Pedestal, PEDESTAL_SPAWN_RADIUS_TILES, PEDESTAL_BOSS_NAMES
 from src.entities.projectile import BurnZone, BananaFrag
-from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE, BORDER_GREEN
+from src.entities.chest import Chest
+from src.utils.settings import WIDTH, HEIGHT, BLACK, load_sprite, BAR_GREEN, BAR_RED, WHITE, BORDER_GREEN, UPGRADES
 
 # Colores de fondo por mundo
 WORLD_TILE_COLORS = {
@@ -87,7 +88,12 @@ class GameSession:
         self.bushes     = pygame.sprite.Group()
         self.burn_zones   = pygame.sprite.Group()
         self.banana_frags = pygame.sprite.Group()
+        self.chests       = pygame.sprite.Group()
         self.pedestals  = pygame.sprite.Group()
+
+        # ── Estado de interacción ─────────────────────────────────────────────
+        self._near_pedestal   = None
+        self._near_chest      = None   # cofre más cercano al jugador
 
         if carry_player is not None:
             self.local_player = carry_player
@@ -113,9 +119,8 @@ class GameSession:
         self.world_timer    = 0
         self.generated_chunks = set()
         self._volume_factor   = 1.0
-        self._near_pedestal   = None
-        self._pedestal_spawned = False
         self._obstacles_cache  = []
+        self._pedestal_spawned = False
         self._ui_fonts         = {}
         self._notifications    = []
         # Cola de respawns diferidos: lista de tipos de enemigo pendientes de crear
@@ -252,7 +257,6 @@ class GameSession:
         if self.local_player.pending_level_ups > 0:
             self.local_player.pending_level_ups -= 1
             return "LEVEL_UP"
-
         self.local_player.update(self.enemies)
         self.update_singleplayer()
         self.projectiles.update()
@@ -287,8 +291,9 @@ class GameSession:
         # Meter en la cola — no instanciar aquí para no lagear el frame
         self._respawn_queue.extend(enemies_to_respawn)
 
-        # Procesar como máximo N respawns por frame para repartir la carga
+        # Respawnear desde la cola con multiplicador de HP según puntuación
         import random as _rnd
+        hp_mult = 1.0 + (self.score // 1000) * 0.05
         for _ in range(min(self._RESPAWNS_PER_FRAME, len(self._respawn_queue))):
             etype = self._respawn_queue.pop(0)
             angle = _rnd.uniform(0, 360)
@@ -296,6 +301,8 @@ class GameSession:
             offset_vec = pygame.math.Vector2(dist, 0).rotate(angle)
             new_pos = self.local_player.pos + offset_vec
             new_enemy = Enemy(target=self.local_player, enemy_type=etype)
+            new_enemy.hp     = max(1, int(new_enemy.hp     * hp_mult))
+            new_enemy.max_hp = max(1, int(new_enemy.max_hp * hp_mult))
             new_enemy.pos  = pygame.math.Vector2(new_pos)
             new_enemy.rect.center = new_pos
             new_enemy.apply_volume_scale(self._volume_factor)
@@ -334,11 +341,20 @@ class GameSession:
                         self.on_enemy_killed(enemy)
                         break   # enemigo muerto — no procesar más frags contra él
 
+        self.chests.update()
+
         # Detectar pedestal más cercano en zona de interacción
         self._near_pedestal = None
         for ped in self.pedestals:
             if ped.active and ped.player_in_summon_zone(self.local_player):
                 self._near_pedestal = ped
+                break
+
+        # Detectar cofre más cercano al jugador
+        self._near_chest = None
+        for chest in self.chests:
+            if chest.player_nearby(self.local_player):
+                self._near_chest = chest
                 break
 
         if self.portals:
@@ -378,8 +394,15 @@ class GameSession:
             self.survival_timer = 0
 
         # ── SISTEMA DE FASES Y SPAWN ─────────────────────────────────────────
-        # Maximo numero de enemigos
-        HARD_CAP = {1: 200, 2: 200, 3: 200}.get(self.world, 80)
+        # Máximo número de enemigos.
+        # En resoluciones menores al ancho por defecto (1720) se reduce a 150
+        # para aliviar la CPU/GPU en pantallas más pequeñas.
+        DEFAULT_WIDTH = 1720
+        _screen_w = pygame.display.get_surface().get_width()
+        if _screen_w < DEFAULT_WIDTH:
+            HARD_CAP = {1: 150, 2: 150, 3: 150}.get(self.world, 150)
+        else:
+            HARD_CAP = {1: 200, 2: 200, 3: 200}.get(self.world, 200)
 
         self.spawn_timer += 1
         if self.spawn_timer >= self.spawn_rate:
@@ -387,6 +410,9 @@ class GameSession:
             if len(self.enemies) < HARD_CAP:
                 enemy_type = self._get_spawn_type()
                 new_enemy = Enemy(target=self.local_player, enemy_type=enemy_type)
+                hp_mult = 1.0 + (self.score // 1000) * 0.05
+                new_enemy.hp     = max(1, int(new_enemy.hp     * hp_mult))
+                new_enemy.max_hp = max(1, int(new_enemy.max_hp * hp_mult))
                 new_enemy.apply_volume_scale(self._volume_factor)
                 self.enemies.add(new_enemy)
                 self.all_sprites.add(new_enemy)
@@ -472,6 +498,18 @@ class GameSession:
                         e2.rect.center = e2.pos
 
         # ── JUGADOR VS ENEMIGOS ───────────────────────────────────────────────
+        # Frames de invencibilidad tras recibir daño por contacto.
+        # Modifica CONTACT_IFRAMES para ajustar el cooldown (en frames a 60 fps).
+        CONTACT_IFRAMES = 20
+
+        # Inicializar el contador de iframes en la sesión si no existe
+        if not hasattr(self, '_contact_iframes'):
+            self._contact_iframes = 0
+
+        # Decrementar el contador de iframes
+        if self._contact_iframes > 0:
+            self._contact_iframes -= 1
+
         max_contact_damage = 0
         player_pos = self.local_player.pos
         for enemy in enemies_list:
@@ -493,10 +531,12 @@ class GameSession:
             if dist < attack_rad:
                 max_contact_damage = max(max_contact_damage, enemy.contact_damage)
 
-        if max_contact_damage > 0:
+        # Solo aplicar daño si el jugador NO está en iframes
+        if max_contact_damage > 0 and self._contact_iframes == 0:
             self.local_player.take_damage(max_contact_damage)
             if self.player_hurt_sound:
                 self.player_hurt_sound.play()
+            self._contact_iframes = CONTACT_IFRAMES   # activar cooldown
 
         # ── COLISIÓN JUGADOR VS ROCAS Y ÁRBOLES ──────────────────────────────
         # Solo el jugador colisiona con obstáculos (los enemigos los atraviesan,
@@ -581,11 +621,11 @@ class GameSession:
     def _get_spawn_type(self):
         if self.world == 1:
             if self.current_phase == 1:
-                return random.choice(["zombie", "slime"])
+                return random.choice(["slime", "slime"])
             elif self.current_phase == 2:
-                return random.choice(["zombie", "slime", "goblin"])
+                return random.choice(["goblin", "slime", "goblin"])
             elif self.current_phase == 3:
-                return random.choice(["goblin", "goblin", "slime", "zombie"])
+                return random.choice(["zombie", "goblin", "slime", "zombie"])
             else:
                 return random.choice(["goblin", "zombie", "slime"])
 
@@ -593,7 +633,7 @@ class GameSession:
             if self.current_phase == 1:
                 return "zombie"
             elif self.current_phase == 2:
-                return random.choice(["zombie", "golem"])
+                return random.choice(["zombie", "golem", "golem"])
             elif self.current_phase == 3:
                 return random.choice(["golem", "skeleton", "skeleton"])
             else:
@@ -644,10 +684,29 @@ class GameSession:
 
         self.score += 500 if enemy.is_boss_type() else 50
 
+        # 1% de probabilidad de que el enemigo suelte un cofre
+        if random.random() < 0.05 and UPGRADES:
+            upgrade = random.choice(UPGRADES)
+            chest = Chest(enemy.pos, upgrade)
+            self.chests.add(chest)
+            self.all_sprites.add(chest)
+
         if enemy.is_boss_type() and not self.boss_defeated:
             self.boss_defeated = True
             self._spawn_portal(enemy.pos)
 
+    def open_chest(self):
+        """Llama esto cuando el jugador pulsa E cerca de un cofre.
+        Devuelve el dict de mejora si se abrió, None si no había cofre."""
+        if self._near_chest is not None:
+            upgrade = self._near_chest.upgrade
+            self._near_chest.opened = True
+            self._near_chest.kill()
+            self._near_chest = None
+            return upgrade
+        return None
+
+    # ─────────────────────────────────────────────────────────────────────────
     def _spawn_portal(self, pos):
         if self.world >= 3:
             return
@@ -677,6 +736,9 @@ class GameSession:
         for enemy in self.enemies:
             if enemy.is_boss_type():
                 enemy.draw_boss_ui(screen, self.all_sprites.offset)
+        # Prompt de cofre cercano
+        if self._near_chest is not None:
+            self._near_chest.draw_prompt(screen, self.all_sprites.offset)
         self.draw_ui(screen)
 
     def _get_font(self, size, bold=True):

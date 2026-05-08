@@ -6,6 +6,7 @@ import math
 
 from src.utils.settings import *
 from src.core.game import GameSession
+from src.utils.cutscene import LogoSplash, StorySequence
 
 # Resoluciones disponibles (etiqueta, ancho, alto)
 RESOLUTIONS = [
@@ -77,6 +78,10 @@ class Engine:
         pygame.key.set_repeat(500, 50)
 
         self._load_assets()
+
+        # ── CINEMÁTICAS ──────────────────────────────────────────────────────
+        self._cutscene      = None   # LogoSplash o StorySequence activa
+        self._cutscene_next = None   # estado al que ir tras terminar la cinemática
 
         self.network_socket = None
         self.host = "3.250.15.37"
@@ -285,9 +290,14 @@ class Engine:
     # ─────────────────────────────────────────────────────────────────────────
 
     def run(self):
+        # Arrancar siempre con el splash de logo
+        self._start_logo_splash()
+
         while True:
             self.update_music()
-            if   self.state == "MENU_PRINCIPAL":          self.menu_principal_loop()
+            if   self.state == "LOGO_SPLASH":             self._cutscene_loop()
+            elif self.state == "STORY_SEQUENCE":          self._cutscene_loop()
+            elif self.state == "MENU_PRINCIPAL":          self.menu_principal_loop()
             elif self.state == "MENU_LOGIN":              self.menu_login_loop()
             elif self.state == "MENU_REGISTER":           self.menu_register_loop()
             elif self.state == "MENU_SELECCION_MODO":     self.menu_seleccion_modo_loop()
@@ -299,6 +309,74 @@ class Engine:
             elif self.state == "GAME_OVER":               self.game_over_loop()
             elif self.state == "LEVEL_UP":                self.level_up_loop()
             elif self.state == "CHEST_REWARD":            self.chest_reward_loop()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CINEMÁTICAS
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _start_logo_splash(self):
+        """Inicia el splash de logo; al terminar lanza la historia de inicio."""
+        def _on_logo_done():
+            self._start_story("inicio", "MENU_PRINCIPAL")
+
+        self._cutscene = LogoSplash(self.screen, on_done=_on_logo_done)
+        self._cutscene_next = None
+        self.state = "LOGO_SPLASH"
+
+    def _start_story(self, folder_key: str, next_state: str):
+        """
+        Inicia una secuencia de slides de historia.
+        Si no hay imágenes NI textos para esa clave, va directamente a next_state.
+        """
+        import os
+        base = os.path.join("assets", "historia", folder_key)
+        texts = []
+        from src.utils.cutscene import STORY_TEXTS
+        texts = STORY_TEXTS.get(folder_key, [])
+        has_images = os.path.isdir(base) and any(
+            f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp"))
+            for f in os.listdir(base)
+        ) if os.path.isdir(base) else False
+
+        if not has_images and not texts:
+            self.state = next_state
+            return
+
+        def _on_done():
+            self.state = next_state
+
+        self._cutscene = StorySequence(
+            self.screen, folder_key, on_done=_on_done,
+            sx=self._sx, sy=self._sy, sf=self._sf
+        )
+        self._cutscene_next = next_state
+        self.state = "STORY_SEQUENCE"
+
+    def _cutscene_loop(self):
+        """Loop genérico para cualquier cinemática activa."""
+        if self._cutscene is None:
+            self.state = self._cutscene_next or "MENU_PRINCIPAL"
+            return
+
+        # Guardamos la cinemática actual para compararla luego
+        current_cutscene = self._cutscene
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self._quit()
+            if current_cutscene.handle_event(event):
+                # Solo borramos si el callback no ha cargado una nueva cinemática
+                if self._cutscene is current_cutscene:
+                    self._cutscene = None
+                return
+
+        done = current_cutscene.update_and_draw()
+        if done:
+            # Solo borramos si el callback no ha cargado una nueva cinemática
+            if self._cutscene is current_cutscene:
+                self._cutscene = None
+
+        self.clock.tick(FPS)
 
     # ─────────────────────────────────────────────────────────────────────────
     # MENÚ PRINCIPAL
@@ -729,7 +807,7 @@ class Engine:
                 "key":   "caballero",
                 "name":  "Caballero",
                 "desc":  "Guerrero resistente con\nalto aguante en combate",
-                "stats": ["Vida: 250", "Vel: 4", "Espada"],
+                "stats": ["Vida: 150", "Vel: 4", "Espada"],
                 "icon":  "assets/sprites/icons/knight_icon.png",
                 "color": (60, 100, 200),
                 "accent": (100, 160, 255),
@@ -738,7 +816,7 @@ class Engine:
                 "key":   "mago",
                 "name":  "Mago",
                 "desc":  "Veloz lanzador de hechizos\ncon gran movilidad",
-                "stats": ["Vida: 120", "Vel: 6", "Varita"],
+                "stats": ["Vida: 80", "Vel: 6", "Varita"],
                 "icon":  "assets/sprites/icons/mage_icon.png",
                 "color": (100, 30, 180),
                 "accent": (180, 80, 255),
@@ -747,7 +825,7 @@ class Engine:
                 "key":   "my_uncle",
                 "name":  "Mi Tío",
                 "desc":  "Personaje misterioso que\nlanza plátanos como armas",
-                "stats": ["Vida: 160", "Vel: 5", "Banana"],
+                "stats": ["Vida: 100", "Vel: 5", "Banana"],
                 "icon":  "assets/sprites/icons/my_uncle_icon.png",
                 "color": (120, 90, 30),
                 "accent": (220, 180, 60),
@@ -871,7 +949,7 @@ class Engine:
                     self.character_name = char
                     self.game = GameSession(character_name=char, multiplayer=False, world=1)
                     self.apply_volume()
-                    self.state = "PLAYING"
+                    self._start_story("mundo_1", "PLAYING")
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = "MENU_SELECCION_MODO"
                 elif btn_settings.collidepoint(mouse_pos):
@@ -1161,6 +1239,12 @@ class Engine:
                                               multiplayer=False, world=next_world, carry_player=player)
                 self.game.score = accumulated
                 self.apply_volume()
+                # Cinemática de introducción al nuevo mundo
+                folder = f"mundo_{next_world}"
+                self._start_story(folder, "PLAYING")
+            else:
+                # Último boss derrotado → cinemática final
+                self._start_story("final", "GAME_OVER")
             return
 
         self.game.draw(self.screen)
@@ -1309,21 +1393,25 @@ class Engine:
             # Sombra
             pygame.draw.rect(self.screen, (8, 8, 12), rect.move(0, 7), border_radius=18)
 
-            # Fondo de tarjeta con gradiente simulado
+            # Fondo de tarjeta — se dibuja como rect redondeado sobre un Surface SRCALPHA
+            # para que el color NO salga fuera del borde redondeado.
             card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
             r, g, b = accent
-            card_surf.fill((max(r - 60, 0), max(g - 60, 0), max(b - 60, 0), 210 if hov else 175))
+            bg_alpha = 210 if hov else 175
+            pygame.draw.rect(card_surf, (max(r - 60, 0), max(g - 60, 0), max(b - 60, 0), bg_alpha),
+                             pygame.Rect(0, 0, card_w, card_h), border_radius=18)
             self.screen.blit(card_surf, rect.topleft)
 
             border_col = accent if hov else (70, 70, 80)
             border_w   = 3 if hov else 2
             pygame.draw.rect(self.screen, border_col, rect, border_w, border_radius=18)
 
-            # Brillo superior al hacer hover
+            # Brillo superior al hacer hover — recortado al ancho interior del borde
             if hov:
-                glow = pygame.Surface((card_w, self._sy(4)), pygame.SRCALPHA)
+                glow_h = self._sy(4)
+                glow = pygame.Surface((card_w - border_w * 2, glow_h), pygame.SRCALPHA)
                 glow.fill((*accent, 160))
-                self.screen.blit(glow, (rect.x, rect.y + border_w))
+                self.screen.blit(glow, (rect.x + border_w, rect.y + border_w))
 
             # Icono de mejora
             icon_size = int(min(card_w * 0.38, card_h * 0.30))
@@ -1371,21 +1459,25 @@ class Engine:
             desc_surf = font_desc.render(upgrade["desc"], True, (210, 210, 230))
             self.screen.blit(desc_surf, desc_surf.get_rect(centerx=rect.centerx, y=text_y))
 
-            # Etiqueta del arma debajo de la descripción
-            if upgrade.get("weapon"):
-                badge_font = pygame.font.SysFont("Arial", self._sf(13), bold=True)
-                badge_surf = badge_font.render(upgrade["weapon"].upper(), True, accent)
-                self.screen.blit(badge_surf, badge_surf.get_rect(
-                    centerx=rect.centerx,
-                    bottom=rect.bottom - self._sy(10)))
+            # ── Zona inferior fija: badge de arma + label "Elegir" (sin superposición) ──
+            # Se reservan siempre las últimas filas de la tarjeta para estos elementos.
+            pick_font  = pygame.font.SysFont("Arial", self._sf(14), bold=True)
+            badge_font = pygame.font.SysFont("Arial", self._sf(13), bold=True)
 
-            # Label hover al fondo
+            # "Elegir" siempre en la última fila
+            pick_surf = pick_font.render("Elegir", True, WHITE)
+            pick_y    = rect.bottom - pick_surf.get_height() - self._sy(10)
+
+            # Badge del arma justo encima del "Elegir" (con pequeño margen)
+            if upgrade.get("weapon"):
+                badge_surf = badge_font.render(upgrade["weapon"].upper(), True, accent)
+                badge_y    = pick_y - badge_surf.get_height() - self._sy(6)
+                self.screen.blit(badge_surf, badge_surf.get_rect(centerx=rect.centerx, y=badge_y))
+
+            # Highlight y texto "Elegir" solo al hacer hover
             if hov:
-                pick_font = pygame.font.SysFont("Arial", self._sf(14), bold=True)
-                pick_surf = pick_font.render("Elegir", True, WHITE)
-                pick_y    = rect.bottom - pick_surf.get_height() - self._sy(12)
-                hl        = pygame.Surface((card_w - self._sx(28),
-                                            pick_surf.get_height() + self._sy(8)), pygame.SRCALPHA)
+                hl = pygame.Surface((card_w - self._sx(28),
+                                     pick_surf.get_height() + self._sy(8)), pygame.SRCALPHA)
                 hl.fill((*accent, 70))
                 self.screen.blit(hl, (rect.x + self._sx(14), pick_y - self._sy(4)))
                 self.screen.blit(pick_surf, pick_surf.get_rect(centerx=rect.centerx, y=pick_y))

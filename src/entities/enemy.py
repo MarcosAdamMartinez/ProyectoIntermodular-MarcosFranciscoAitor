@@ -26,11 +26,11 @@ class Enemy(pygame.sprite.Sprite):
         elif enemy_type == "demon":
             size = (110, 110); color = (180, 20, 20);   self.speed = random.uniform(2.5, 3.5);  self.hp = 300
         elif enemy_type == "giga_zombie":
-            size = (170, 170); color = (180, 30, 0);    self.speed = random.uniform(1.0, 1.5);  self.hp = 10000
+            size = (170, 170); color = (180, 30, 0);    self.speed = random.uniform(2.5, 3.5);  self.hp = 10000
         elif enemy_type == "yeti":
-            size = (170, 170); color = (200, 230, 255); self.speed = random.uniform(1.2, 1.8);  self.hp = 20000
+            size = (170, 170); color = (200, 230, 255); self.speed = random.uniform(3.0, 4.8);  self.hp = 20000
         elif enemy_type == "minotaur":
-            size = (200, 200); color = (120, 40, 10);   self.speed = random.uniform(1.5, 2.2);  self.hp = 30000
+            size = (200, 200); color = (120, 40, 10);   self.speed = random.uniform(3.0, 4.0);  self.hp = 30000
         else:  # boss genérico
             size = (200, 200); color = (150, 0, 0);     self.speed = random.uniform(1.0, 1.5);  self.hp = 500
 

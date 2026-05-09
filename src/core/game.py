@@ -113,6 +113,7 @@ class GameSession:
         self.current_phase = 1
         self.boss_spawned  = False
         self.boss_defeated = False
+        self.final_slides_pending = False
 
         self.score          = 0
         self.survival_timer = 0
@@ -365,6 +366,9 @@ class GameSession:
             if hit_portal:
                 return "NEXT_WORLD"
 
+        if getattr(self, 'final_slides_pending', False):
+            self.final_slides_pending = False
+            return "FINAL_BOSS_KILLED"
         return "PLAYING"
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -693,7 +697,10 @@ class GameSession:
 
         if enemy.is_boss_type() and not self.boss_defeated:
             self.boss_defeated = True
-            self._spawn_portal(enemy.pos)
+            if enemy.enemy_type == "minotaur":
+                self.final_slides_pending = True
+            else:
+                self._spawn_portal(enemy.pos)
 
     def open_chest(self):
         """Llama esto cuando el jugador pulsa E cerca de un cofre.

@@ -46,10 +46,6 @@ STORY_TEXTS = {
         "El Valle Verdealma.\n"
         "Antaño hogar de druidas y bestias nobles,\n"
         "ahora invadido por criaturas corrompidas.",
-
-        "Las aldeas que quedaban han sido evacuadas.\n"
-        "Solo el héroe se adentra en la espesura,\n"
-        "buscando el altar que convoca al guardián caído.",
     ],
 
     # ── Introducción al Mundo 2 ───────────────────────────────────────────────
@@ -57,10 +53,6 @@ STORY_TEXTS = {
         "El Yermo de Skjorn te aguarda.\n"
         "Un viento que congela el alma sopla sin cesar\n"
         "desde las cumbres donde mora el Yeti.",
-
-        "El frío no es tu mayor enemigo aquí.\n"
-        "Los espíritus del hielo tienen memoria,\n"
-        "y recuerdan a quienes los despiertan.",
     ],
 
     # ── Introducción al Mundo 3 ───────────────────────────────────────────────
@@ -83,10 +75,6 @@ STORY_TEXTS = {
         "La tierra de Eldrath respira de nuevo.\n"
         "Los supervivientes alzarán monumentos\n"
         "en honor al héroe que nunca buscarán.",
-
-        "Pero el héroe ya camina hacia el horizonte,\n"
-        "sabiendo que la paz es frágil\n"
-        "y el abismo, paciente.",
     ],
 }
 
@@ -310,7 +298,7 @@ class StorySequence:
         box_w    = max_w
         box_h    = len(lines) * line_h + self.TEXT_PAD_Y * 2
         box_x    = (W - box_w) // 2
-        box_y    = int(H * 0.68) - box_h // 2   # posición vertical ~68 %
+        box_y    = int(H * 0.91) - box_h // 2   # posición vertical ~68 %
 
         # Fondo translúcido
         bg = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
@@ -333,7 +321,7 @@ class StorySequence:
         W, H = self.screen.get_size()
         txt = f"{self.index + 1} / {self._total}"
         surf = self._font_counter.render(txt, True, (200, 200, 200))
-        self.screen.blit(surf, surf.get_rect(center=(W // 2, H - self._sy(30))))
+        self.screen.blit(surf, surf.get_rect(center=(W // 2, H - self._sy(25))))
 
     def _draw_nav_button(self, rect, label, enabled=True):
         mouse_pos = pygame.mouse.get_pos()

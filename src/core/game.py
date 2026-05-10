@@ -368,7 +368,7 @@ class GameSession:
 
         if getattr(self, 'final_slides_pending', False):
             self.final_slides_pending = False
-            return "FINAL_BOSS_KILLED"
+            return "NEXT_WORLD"
         return "PLAYING"
 
     # ─────────────────────────────────────────────────────────────────────────

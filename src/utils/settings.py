@@ -31,8 +31,8 @@ PLAYER_SIZE = 100
 # DATOS DE PERSONAJES
 CHARACTERS = {
     "caballero": {
-        "speed": 14,
-        "hp": 1000,
+        "speed": 4,
+        "hp": 240,
         "color": BLUE,
         "sprite": "assets/sprites/players/knight.png",
         "anim_folder": "knight",
@@ -58,7 +58,7 @@ CHARACTERS = {
 
 # DATOS DE ARMAS
 WEAPONS = {
-    "espada": {"cooldown": 10, "damage": 25000, "speed": 0,  "color": WHITE,  "type": "melee",  "melee": True},
+    "espada": {"cooldown": 40, "damage": 25, "speed": 0,  "color": WHITE,  "type": "melee",  "melee": True},
     "varita": {"cooldown": 35, "damage": 15,  "speed": 10, "color": YELLOW, "type": "ranged", "burn": True,
                "burn_damage": 6, "burn_radius": 35},
     "banana": {"cooldown": 30, "damage": 10,  "speed": 7,  "color": YELLOW, "type": "banana", "boomerang": True,

@@ -84,7 +84,7 @@ class Engine:
         self._cutscene_next = None   # estado al que ir tras terminar la cinemática
 
         self.network_socket = None
-        self.host = "3.250.15.37"
+        self.host = "34.250.99.172"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
@@ -106,6 +106,8 @@ class Engine:
         self.game_over_menu_bg = load_sprite("assets/sprites/backgrounds/game_over_bg.png",
                                               (self.W, self.H), DARK_GREY, remove_bg=False)
         self.settings_icon     = load_sprite("assets/sprites/icons/settings.png", (80, 60), DARK_GREY)
+        self.controles_bg      = load_sprite("assets/sprites/backgrounds/controles_bg.png",
+                                              (self.W, self.H), (20, 20, 30), remove_bg=False)
 
     def _apply_resolution(self):
         """Cambia la resolución de pantalla y recarga assets dependientes."""
@@ -161,6 +163,23 @@ class Engine:
             self.screen.blit(hover, (sx, sy))
         scaled_icon = pygame.transform.scale(self.settings_icon, (icon_size, int(icon_size * 0.75)))
         self.screen.blit(scaled_icon, (sx, sy))
+        return btn
+
+    def _draw_help_icon(self):
+        """Dibuja el botón '?' en la esquina inferior derecha. Devuelve su Rect."""
+        size   = self._sx(56)
+        margin = self._sx(20)
+        sx = self.W - size - margin
+        sy = self.H - size - margin
+        btn = pygame.Rect(sx, sy, size, size)
+        mouse_pos = pygame.mouse.get_pos()
+        color = (80, 90, 110) if not btn.collidepoint(mouse_pos) else (110, 130, 160)
+        pygame.draw.rect(self.screen, (15, 15, 18), btn.move(0, 3), border_radius=12)
+        pygame.draw.rect(self.screen, color,        btn,            border_radius=12)
+        pygame.draw.rect(self.screen, BTN_BORDER,   btn, 2,         border_radius=12)
+        font_q = pygame.font.SysFont("Arial", self._sf(28), bold=True)
+        q_surf = font_q.render("?", True, WHITE)
+        self.screen.blit(q_surf, q_surf.get_rect(center=btn.center))
         return btn
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -304,6 +323,7 @@ class Engine:
             elif self.state == "MENU_SELECCION_SOLO":     self.menu_seleccion_solo()
             elif self.state == "MENU_SELECCION_SCORE":    self.menu_score_loop()
             elif self.state == "MENU_SETTINGS":           self.menu_settings_loop()
+            elif self.state == "MENU_CONTROLES":          self.menu_controles_loop()
             elif self.state == "PAUSE_MENU":              self.pause_menu_loop()
             elif self.state == "PLAYING":                 self.game_loop()
             elif self.state == "GAME_OVER":               self.game_over_loop()
@@ -400,6 +420,7 @@ class Engine:
         self.draw_modern_button(btn_esc,  "Salir al Escritorio", font)
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_PRINCIPAL"
@@ -412,8 +433,35 @@ class Engine:
                     self.state = "MENU_LOGIN"
                 elif btn_settings.collidepoint(mouse_pos):
                     self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):
+                    self.state = "MENU_CONTROLES"
                 elif btn_esc.collidepoint(mouse_pos):
                     self._quit()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CONTROLES
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def menu_controles_loop(self):
+        W, H = self.W, self.H
+        self.screen.blit(self.controles_bg, (0, 0))
+
+        font_btn = pygame.font.SysFont("Arial", self._sf(28), bold=True)
+        bw, bh   = self._sx(340), self._sy(62)
+        btn_volver = pygame.Rect(W // 2 - bw // 2, H - self._sy(100), bw, bh)
+        self.draw_modern_button(btn_volver, "Volver", font_btn)
+
+        mouse_pos = pygame.mouse.get_pos()
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self._quit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.state = self.menu_anterior
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if btn_volver.collidepoint(mouse_pos):
+                    self.state = self.menu_anterior
 
     # ─────────────────────────────────────────────────────────────────────────
     # SETTINGS
@@ -519,6 +567,7 @@ class Engine:
         btn_volver = pygame.Rect(cx - bw // 2, H // 2 + self._sy(220), bw, bh)
         self.draw_modern_button(btn_volver, "Volver", font_small)
 
+        btn_help  = self._draw_help_icon()
         pygame.display.flip()
 
         for event in pygame.event.get():
@@ -548,6 +597,9 @@ class Engine:
                 elif btn_res_next.collidepoint(mouse_pos):
                     self.res_index = (self.res_index + 1) % len(RESOLUTIONS)
                     self._apply_resolution()
+
+                elif btn_help.collidepoint(mouse_pos):
+                    self.state = "MENU_CONTROLES"
 
                 elif btn_volver.collidepoint(mouse_pos):
                     self.state = self.menu_anterior
@@ -627,6 +679,7 @@ class Engine:
             self.screen.blit(txt_err, (cx - txt_err.get_width() // 2, err_y + my))
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_LOGIN"
@@ -638,6 +691,7 @@ class Engine:
                 if user_rect.collidepoint(mouse_pos):   self.active_input = "username"
                 elif pass_rect.collidepoint(mouse_pos): self.active_input = "password"
                 elif btn_settings.collidepoint(mouse_pos): self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):     self.state = "MENU_CONTROLES"
                 else: self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
@@ -713,6 +767,7 @@ class Engine:
             self.screen.blit(txt_err, (W // 2 - txt_err.get_width() // 2, err_y + my))
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_PRINCIPAL"
@@ -724,6 +779,7 @@ class Engine:
                 if user_rect.collidepoint(mouse_pos):   self.active_input = "username"
                 elif pass_rect.collidepoint(mouse_pos): self.active_input = "password"
                 elif btn_settings.collidepoint(mouse_pos): self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):     self.state = "MENU_CONTROLES"
                 else: self.active_input = None
 
                 if btn_log.collidepoint(mouse_pos):
@@ -760,6 +816,7 @@ class Engine:
         self.draw_modern_button(btn_menu_princ, "Volver al menu principal", font)
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_SELECCION_MODO"
@@ -772,6 +829,7 @@ class Engine:
                 elif btn_score.collidepoint(mouse_pos):
                     self.last_basc_time = 0; self.state = "MENU_SELECCION_SCORE"
                 elif btn_settings.collidepoint(mouse_pos):   self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):       self.state = "MENU_CONTROLES"
                 elif btn_menu_princ.collidepoint(mouse_pos):
                     self.state = "MENU_PRINCIPAL"
                     if not self.offline_mode:
@@ -807,7 +865,7 @@ class Engine:
                 "key":   "caballero",
                 "name":  "Caballero",
                 "desc":  "Guerrero resistente con\nalto aguante en combate",
-                "stats": ["Vida: 150", "Vel: 4", "Espada"],
+                "stats": ["Vida: 240", "Vel: 4", "Espada"],
                 "icon":  "assets/sprites/icons/knight_icon.png",
                 "color": (60, 100, 200),
                 "accent": (100, 160, 255),
@@ -816,7 +874,7 @@ class Engine:
                 "key":   "mago",
                 "name":  "Mago",
                 "desc":  "Veloz lanzador de hechizos\ncon gran movilidad",
-                "stats": ["Vida: 80", "Vel: 6", "Varita"],
+                "stats": ["Vida: 120", "Vel: 6", "Varita"],
                 "icon":  "assets/sprites/icons/mage_icon.png",
                 "color": (100, 30, 180),
                 "accent": (180, 80, 255),
@@ -825,7 +883,7 @@ class Engine:
                 "key":   "my_uncle",
                 "name":  "Mi Tío",
                 "desc":  "Personaje misterioso que\nlanza plátanos como armas",
-                "stats": ["Vida: 100", "Vel: 5", "Banana"],
+                "stats": ["Vida: 160", "Vel: 5", "Banana"],
                 "icon":  "assets/sprites/icons/my_uncle_icon.png",
                 "color": (120, 90, 30),
                 "accent": (220, 180, 60),
@@ -933,6 +991,7 @@ class Engine:
         self.draw_modern_button(btn_volver, "Volver Atrás", font_back)
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         pygame.display.flip()
         self.menu_anterior = "MENU_SELECCION_SOLO"
 
@@ -954,6 +1013,8 @@ class Engine:
                     self.state = "MENU_SELECCION_MODO"
                 elif btn_settings.collidepoint(mouse_pos):
                     self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):
+                    self.state = "MENU_CONTROLES"
 
     # ─────────────────────────────────────────────────────────────────────────
     # SCOREBOARD
@@ -1154,6 +1215,7 @@ class Engine:
         self.draw_modern_button(btn_volver, "Volver al menu", font)
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "MENU_SELECCION_SCORE"
@@ -1164,6 +1226,7 @@ class Engine:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if   btn_volver.collidepoint(mouse_pos):   self.state = "MENU_SELECCION_MODO"
                 elif btn_settings.collidepoint(mouse_pos): self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):     self.state = "MENU_CONTROLES"
 
     # ─────────────────────────────────────────────────────────────────────────
     # GAMEPLAY
@@ -1243,8 +1306,8 @@ class Engine:
                 folder = f"mundo_{next_world}"
                 self._start_story(folder, "PLAYING")
             else:
-                # Último boss derrotado → cinemática final
-                self._start_story("final", "GAME_OVER")
+                # Último boss derrotado → cinemática final, luego sigue jugando
+                self._start_story("final", "PLAYING")
             return
 
         self.game.draw(self.screen)
@@ -1279,6 +1342,7 @@ class Engine:
         self.draw_modern_button(btn_abandonar, "Abandonar partida", font_btn)
 
         btn_settings = self._draw_settings_icon()
+        btn_help     = self._draw_help_icon()
         mouse_pos = pygame.mouse.get_pos()
         pygame.display.flip()
         self.menu_anterior = "PAUSE_MENU"
@@ -1292,6 +1356,7 @@ class Engine:
                 if   btn_reanudar.collidepoint(mouse_pos):   self.state = "PLAYING"
                 elif btn_abandonar.collidepoint(mouse_pos):  self.state = "MENU_SELECCION_MODO"
                 elif btn_settings.collidepoint(mouse_pos):   self.state = "MENU_SETTINGS"
+                elif btn_help.collidepoint(mouse_pos):       self.state = "MENU_CONTROLES"
 
     # ─────────────────────────────────────────────────────────────────────────
     # GAME OVER

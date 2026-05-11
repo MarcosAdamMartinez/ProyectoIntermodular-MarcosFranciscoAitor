@@ -84,7 +84,7 @@ class Engine:
         self._cutscene_next = None   # estado al que ir tras terminar la cinemática
 
         self.network_socket = None
-        self.host = "34.250.99.172"
+        self.host = "3.250.15.37"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
@@ -865,7 +865,7 @@ class Engine:
                 "key":   "caballero",
                 "name":  "Caballero",
                 "desc":  "Guerrero resistente con\nalto aguante en combate",
-                "stats": ["Vida: 240", "Vel: 4", "Espada"],
+                "stats": ["Vida: 150", "Vel: 4", "Espada"],
                 "icon":  "assets/sprites/icons/knight_icon.png",
                 "color": (60, 100, 200),
                 "accent": (100, 160, 255),
@@ -874,7 +874,7 @@ class Engine:
                 "key":   "mago",
                 "name":  "Mago",
                 "desc":  "Veloz lanzador de hechizos\ncon gran movilidad",
-                "stats": ["Vida: 120", "Vel: 6", "Varita"],
+                "stats": ["Vida: 80", "Vel: 6", "Varita"],
                 "icon":  "assets/sprites/icons/mage_icon.png",
                 "color": (100, 30, 180),
                 "accent": (180, 80, 255),
@@ -883,7 +883,7 @@ class Engine:
                 "key":   "my_uncle",
                 "name":  "Mi Tío",
                 "desc":  "Personaje misterioso que\nlanza plátanos como armas",
-                "stats": ["Vida: 160", "Vel: 5", "Banana"],
+                "stats": ["Vida: 100", "Vel: 5", "Banana"],
                 "icon":  "assets/sprites/icons/my_uncle_icon.png",
                 "color": (120, 90, 30),
                 "accent": (220, 180, 60),
@@ -1252,15 +1252,26 @@ class Engine:
         estado_juego = self.game.update(self.username_text, self.network_socket)
 
         if estado_juego == "GAME_OVER":
-            if self.offline_mode:
-                score_actual = self.game.score
-                if score_actual > self.offline_max_score:
-                    self.offline_max_score = score_actual
-                    datos = self._load_offline()
-                    self._save_offline(
-                        datos.get("username", self.username_text),
-                        datos.get("password", self.password_text),
-                        score_actual)
+            score_actual = self.game.score
+            level_actual = self.game.local_player.level
+
+            # ── Online: enviar sbsc al servidor ──────────────────────────────
+            if not self.offline_mode and self.network_socket:
+                try:
+                    msg = f"sbsc:{self.username_text}:{level_actual}:{score_actual}\n"
+                    self.network_socket.sendall(msg.encode())
+                except Exception:
+                    pass
+
+            # ── Offline: guardar en JSON si supera el máximo ─────────────────
+            if self.offline_mode and score_actual > self.offline_max_score:
+                self.offline_max_score = score_actual
+                datos = self._load_offline()
+                self._save_offline(
+                    datos.get("username", self.username_text),
+                    datos.get("password", self.password_text),
+                    score_actual)
+
             self.state = "GAME_OVER"
             return
         elif estado_juego == "LEVEL_UP":
@@ -1306,7 +1317,13 @@ class Engine:
                 folder = f"mundo_{next_world}"
                 self._start_story(folder, "PLAYING")
             else:
-                # Último boss derrotado → cinemática final, luego sigue jugando
+                # Último boss derrotado → cinemática final, luego sigue jugando en mundo 3
+                player      = self.game.local_player
+                accumulated = self.game.score
+                self.game   = GameSession(character_name=getattr(self, "character_name", "caballero"),
+                                          multiplayer=False, world=3, carry_player=player)
+                self.game.score = accumulated
+                self.apply_volume()
                 self._start_story("final", "PLAYING")
             return
 

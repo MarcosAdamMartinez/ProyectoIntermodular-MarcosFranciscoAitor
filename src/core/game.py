@@ -248,11 +248,6 @@ class GameSession:
     # ─────────────────────────────────────────────────────────────────────────
     def update(self, username, socket):
         if self.local_player.hp <= 0:
-            try:
-                subir_score = f"sbsc:{username}:{self.local_player.level}:{self.score}\n"
-                socket.sendall(subir_score.encode())
-            except:
-                pass
             return "GAME_OVER"
 
         if self.local_player.pending_level_ups > 0:

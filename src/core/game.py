@@ -136,6 +136,8 @@ class GameSession:
         self._volume_factor   = 1.0
         self._obstacles_cache  = []
         self._pedestal_spawned = False
+        # True tras matar al minotauro: congela spawn_rate y bloquea pedestal
+        self._endgame_active = False
         self._ui_fonts         = {}
         self._notifications    = []
         # Cola de respawns diferidos: deque para pop(0) en O(1) en vez de O(n)
@@ -376,9 +378,9 @@ class GameSession:
             if hit_portal:
                 return "NEXT_WORLD"
 
-        if getattr(self, 'final_slides_pending', False):
-            self.final_slides_pending = False
-            return "NEXT_WORLD"
+        if getattr(self, '_endgame_cutscene_pending', False):
+            self._endgame_cutscene_pending = False
+            return "ENDGAME_CUTSCENE"
         return "PLAYING"
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -424,7 +426,7 @@ class GameSession:
             if len(self.enemies) < HARD_CAP:
                 enemy_type = self._get_spawn_type()
                 new_enemy = Enemy(target=self.local_player, enemy_type=enemy_type)
-                hp_mult  = 1.0 + (self.score // 1000) * 0.1
+                hp_mult  = 1.0 + (self.score // 1000) * 0.05
                 dmg_mult = 1.0 + (self.score // 1000) * 0.05
                 new_enemy.hp             = max(1, int(new_enemy.hp             * hp_mult))
                 new_enemy.max_hp         = max(1, int(new_enemy.max_hp         * hp_mult))
@@ -463,16 +465,17 @@ class GameSession:
                     self._spawn_pedestal_guaranteed()
 
             elif self.current_phase == 4:
-                # El boss ya no se invoca automáticamente — solo desde el pedestal.
-                # Fase 4: el spawn baja gradualmente sin límite hasta 1
-                if self.spawn_rate > 1:
-                    if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
-                        self.spawn_rate -= 0.05
-                    else:
-                        self.spawn_rate = max(1, self.spawn_rate - 0.03)
+                # Fase 4: el spawn baja gradualmente hasta 1,
+                # SALVO que el minotauro ya haya muerto (spawn_rate congelado).
+                if not self._endgame_active:
+                    if self.spawn_rate > 1:
+                        if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
+                            self.spawn_rate -= 0.05
+                        else:
+                            self.spawn_rate = max(1, self.spawn_rate - 0.03)
 
-                if not self._pedestal_spawned:
-                    self._spawn_pedestal_guaranteed()
+                    if not self._pedestal_spawned:
+                        self._spawn_pedestal_guaranteed()
 
         # ── FÍSICAS RÍGIDAS ENTRE ENEMIGOS (spatial hash) ─────────────────────
         # En lugar de O(n²) comparamos solo enemigos en la misma celda/vecinas
@@ -715,7 +718,10 @@ class GameSession:
         if enemy.is_boss_type() and not self.boss_defeated:
             self.boss_defeated = True
             if enemy.enemy_type == "minotaur":
-                self.final_slides_pending = True
+                # No crear portal ni resetear sesión — seguir jugando en mundo 3
+                # La cinemática final se dispara desde update() una sola vez
+                self._endgame_cutscene_pending = True
+                self._endgame_active = True  # congela spawn_rate y bloquea pedestal
             else:
                 self._spawn_portal(enemy.pos)
 

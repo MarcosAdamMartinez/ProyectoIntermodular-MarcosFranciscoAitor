@@ -84,7 +84,7 @@ class Engine:
         self._cutscene_next = None   # estado al que ir tras terminar la cinemática
 
         self.network_socket = None
-        self.host = "108.130.90.155"
+        self.host = "52.215.64.91"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión

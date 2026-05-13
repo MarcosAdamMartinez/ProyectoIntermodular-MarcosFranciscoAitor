@@ -862,7 +862,7 @@ class GameSession:
                 right = (ax + int(_math.cos(angle - _math.pi * 0.75) * arrow_w),
                          ay + int(_math.sin(angle - _math.pi * 0.75) * arrow_w))
 
-                world_arrow_colors = {1: (80, 220, 80), 2: (80, 160, 255), 3: (255, 100, 30)}
+                world_arrow_colors = {1: (236, 108, 56), 2: (141, 225, 124), 3: (92, 123, 207)}
                 arrow_color = world_arrow_colors.get(self.world, (255, 220, 50))
 
                 pygame.draw.polygon(screen, arrow_color,     [tip, left, right])

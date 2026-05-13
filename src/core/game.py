@@ -302,7 +302,8 @@ class GameSession:
         self._respawn_queue.extend(enemies_to_respawn)
 
         # Respawnear desde la cola con multiplicador de HP según puntuación
-        hp_mult = 1.0 + (self.score // 1000) * 0.05
+        hp_mult  = 1.0 + (self.score // 1000) * 0.05
+        dmg_mult = 1.0 + (self.score // 1000) * 0.05
         for _ in range(min(self._RESPAWNS_PER_FRAME, len(self._respawn_queue))):
             etype = self._respawn_queue.popleft()
             angle = random.uniform(0, 360)
@@ -310,8 +311,9 @@ class GameSession:
             offset_vec = pygame.math.Vector2(dist, 0).rotate(angle)
             new_pos = self.local_player.pos + offset_vec
             new_enemy = Enemy(target=self.local_player, enemy_type=etype)
-            new_enemy.hp     = max(1, int(new_enemy.hp     * hp_mult))
-            new_enemy.max_hp = max(1, int(new_enemy.max_hp * hp_mult))
+            new_enemy.hp             = max(1, int(new_enemy.hp             * hp_mult))
+            new_enemy.max_hp         = max(1, int(new_enemy.max_hp         * hp_mult))
+            new_enemy.contact_damage = max(1, int(new_enemy.contact_damage * dmg_mult))
             new_enemy.pos  = pygame.math.Vector2(new_pos)
             new_enemy.rect.center = new_pos
             new_enemy.apply_volume_scale(self._volume_factor)
@@ -422,9 +424,11 @@ class GameSession:
             if len(self.enemies) < HARD_CAP:
                 enemy_type = self._get_spawn_type()
                 new_enemy = Enemy(target=self.local_player, enemy_type=enemy_type)
-                hp_mult = 1.0 + (self.score // 1000) * 0.05
-                new_enemy.hp     = max(1, int(new_enemy.hp     * hp_mult))
-                new_enemy.max_hp = max(1, int(new_enemy.max_hp * hp_mult))
+                hp_mult  = 1.0 + (self.score // 1000) * 0.1
+                dmg_mult = 1.0 + (self.score // 1000) * 0.05
+                new_enemy.hp             = max(1, int(new_enemy.hp             * hp_mult))
+                new_enemy.max_hp         = max(1, int(new_enemy.max_hp         * hp_mult))
+                new_enemy.contact_damage = max(1, int(new_enemy.contact_damage * dmg_mult))
                 new_enemy.apply_volume_scale(self._volume_factor)
                 self.enemies.add(new_enemy)
                 self.all_sprites.add(new_enemy)

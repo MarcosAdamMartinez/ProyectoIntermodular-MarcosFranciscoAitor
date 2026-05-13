@@ -32,7 +32,7 @@ PLAYER_SIZE = 100
 CHARACTERS = {
     "caballero": {
         "speed": 4,
-        "hp": 24000,
+        "hp": 240,
         "color": BLUE,
         "sprite": "assets/sprites/players/knight.png",
         "anim_folder": "knight",

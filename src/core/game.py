@@ -56,8 +56,7 @@ class CameraGroup(pygame.sprite.Group):
         self.offset.x = player.rect.centerx - W // 2
         self.offset.y = player.rect.centery - H // 2
 
-        display_surface.fill(BLACK)
-
+        # Los tiles cubren toda la pantalla — fill(BLACK) era redundante y caro
         start_x = int(self.offset.x // self.tile_size)
         start_y = int(self.offset.y // self.tile_size)
         tiles_in_x = (W // self.tile_size) + 2
@@ -69,9 +68,24 @@ class CameraGroup(pygame.sprite.Group):
                 y = row * self.tile_size
                 display_surface.blit(self.ground_surface, (x - self.offset.x, y - self.offset.y))
 
-        for sprite in sorted(self.sprites(), key=lambda sprite: getattr(sprite, 'hit_rect', sprite.rect).centery):
-            offset_pos = sprite.rect.topleft - self.offset
-            display_surface.blit(sprite.image, offset_pos)
+        # Culling + sort optimizado: descartar sprites fuera de pantalla ANTES de ordenar
+        off_x = self.offset.x
+        off_y = self.offset.y
+        vis_l = off_x - 64
+        vis_t = off_y - 64
+        vis_r = off_x + W + 64
+        vis_b = off_y + H + 64
+
+        visible = []
+        for spr in self.sprites():
+            r = spr.rect
+            if r.right >= vis_l and r.left <= vis_r and r.bottom >= vis_t and r.top <= vis_b:
+                cy = getattr(spr, 'hit_rect', r).centery
+                visible.append((cy, r.x - off_x, r.y - off_y, spr.image))
+
+        visible.sort(key=lambda t: t[0])
+        for _, bx, by, img in visible:
+            display_surface.blit(img, (bx, by))
 
 
 class GameSession:
@@ -124,8 +138,9 @@ class GameSession:
         self._pedestal_spawned = False
         self._ui_fonts         = {}
         self._notifications    = []
-        # Cola de respawns diferidos: lista de tipos de enemigo pendientes de crear
-        self._respawn_queue: list = []
+        # Cola de respawns diferidos: deque para pop(0) en O(1) en vez de O(n)
+        from collections import deque as _deque
+        self._respawn_queue: _deque = _deque()
         # Cuántos enemigos instanciar como máximo por frame desde la cola
         self._RESPAWNS_PER_FRAME = 2
         # Spatial grid para colisión jugador-obstáculos (cell = 256 px)
@@ -287,12 +302,11 @@ class GameSession:
         self._respawn_queue.extend(enemies_to_respawn)
 
         # Respawnear desde la cola con multiplicador de HP según puntuación
-        import random as _rnd
         hp_mult = 1.0 + (self.score // 1000) * 0.05
         for _ in range(min(self._RESPAWNS_PER_FRAME, len(self._respawn_queue))):
-            etype = self._respawn_queue.pop(0)
-            angle = _rnd.uniform(0, 360)
-            dist  = _rnd.randint(RESPAWN_MIN, RESPAWN_MAX)
+            etype = self._respawn_queue.popleft()
+            angle = random.uniform(0, 360)
+            dist  = random.randint(RESPAWN_MIN, RESPAWN_MAX)
             offset_vec = pygame.math.Vector2(dist, 0).rotate(angle)
             new_pos = self.local_player.pos + offset_vec
             new_enemy = Enemy(target=self.local_player, enemy_type=etype)
@@ -606,8 +620,13 @@ class GameSession:
                     proj.kill()
 
         # ── IMÁN DE EXPERIENCIA ───────────────────────────────────────────────
+        _magnet_sq = self.local_player.magnet_radius * self.local_player.magnet_radius
+        _plx = self.local_player.pos.x
+        _ply = self.local_player.pos.y
         for exp in self.exp:
-            if self.local_player.pos.distance_to(exp.pos) < self.local_player.magnet_radius:
+            dx = exp.pos.x - _plx
+            dy = exp.pos.y - _ply
+            if dx * dx + dy * dy < _magnet_sq:
                 exp.target = self.local_player
 
         collected = pygame.sprite.spritecollide(self.local_player, self.exp, True,

@@ -84,7 +84,7 @@ class Engine:
         self._cutscene_next = None   # estado al que ir tras terminar la cinemática
 
         self.network_socket = None
-        self.host = "3.250.15.37"
+        self.host = "108.130.90.155"
 
         # ── MODO OFFLINE ────────────────────────────────────────────────────
         self.offline_mode    = False   # True cuando el jugador eligió jugar sin conexión
@@ -811,7 +811,7 @@ class Engine:
         btn_score      = pygame.Rect(W // 2 - bw // 2, start_y + (bh + gap),      bw, bh)
         btn_menu_princ = pygame.Rect(W // 2 - bw // 2, start_y + (bh + gap) * 2,  bw, bh)
 
-        self.draw_modern_button(btn_solo,       "Un Jugador",              font)
+        self.draw_modern_button(btn_solo,       "Jugar",              font)
         self.draw_modern_button(btn_score,      "Tabla de Clasificacion",  font)
         self.draw_modern_button(btn_menu_princ, "Volver al menu principal", font)
 

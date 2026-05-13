@@ -223,10 +223,9 @@ class GameSession:
         self._pedestal_spawned = True
         self._obstacles_cache  = list(self.rocks) + list(self.bushes) + list(self.pedestals)
         self._add_to_obs_grid(new_pedestal.hit_rect)
-        boss_name = PEDESTAL_BOSS_NAMES.get(self.world, "Boss")
         self._notifications.append({
-            "text":      f"¡Ha aparecido el Altar de Invocación! Búscalo para despertar a {boss_name}",
-            "color":     {1: (120, 255, 120), 2: (120, 180, 255), 3: (255, 120, 60)}.get(self.world, (255, 220, 80)),
+            "text":      f"¡Ha aparecido el Altar de Invocación! Búscalo siguendo la flecha",
+            "color":     {1: (226, 120, 78), 2: (163, 248, 151), 3: (94, 99, 255)}.get(self.world, (255, 220, 80)),
             "timer":     0,
             "max_timer": 360,   # 6 segundos a 60 fps
         })
@@ -781,7 +780,7 @@ class GameSession:
         screen.blit(lvl_text, (x + bar_width + 15, y + 10))
 
         # Mundo — centrado en la parte superior con sombra
-        world_names  = {1: "Mundo 1", 2: "Mundo 2", 3: "Mundo Final"}
+        world_names  = {1: "El Valle Verdealma", 2: "El Yermo de Skjorn", 3: "El Ultimo Bastion: Infernia"}
         world_colors = {1: (100, 200, 100), 2: (100, 150, 255), 3: (255, 100, 100)}
         world_name   = world_names.get(self.world, f"Mundo {self.world}")
         world_color  = world_colors.get(self.world, WHITE)

@@ -96,7 +96,16 @@ class Engine:
 
     def _make_window(self):
         if self.fullscreen:
-            return pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN | pygame.SCALED)
+            # Intentar FULLSCREEN+SCALED; si el driver no soporta renderer de HW,
+            # caer a FULLSCREEN sin SCALED; si tampoco funciona, volver a ventana.
+            try:
+                return pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN | pygame.SCALED)
+            except pygame.error:
+                try:
+                    return pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
+                except pygame.error:
+                    print("Advertencia: no se pudo crear ventana fullscreen, usando modo ventana.")
+                    self.fullscreen = False
         return pygame.display.set_mode((self.W, self.H))
 
     def _load_assets(self):
@@ -201,15 +210,33 @@ class Engine:
             self.game.apply_volume_scale(factor)
 
     def update_music(self):
-        if self.state in ["MENU_PRINCIPAL", "MENU_LOGIN", "MENU_REGISTER", "GAME_OVER",
-                          "MENU_SELECCION_MODO", "MENU_SELECCION_SOLO"] and self.music_state != "MENU":
-            try:
-                pygame.mixer.music.load("assets/sounds/music_menu.mp3")
-                pygame.mixer.music.play(-1)
-                pygame.mixer.music.set_volume(self._vol(0.04))
-                self.music_state = "MENU"
-            except:
-                print("No se encontro assets/sounds/music_menu.mp3")
+        # ── Música de menú (incluyendo GAME_OVER y cinemáticas) ──────────
+        MENU_STATES = {"MENU_PRINCIPAL", "MENU_LOGIN", "MENU_REGISTER",
+                       "MENU_SELECCION_MODO", "MENU_SELECCION_SOLO"}
+        if self.state in MENU_STATES:
+            if self.music_state != "MENU":
+                try:
+                    pygame.mixer.music.load("assets/sounds/music_menu.mp3")
+                    pygame.mixer.music.play(-1)
+                    pygame.mixer.music.set_volume(self._vol(0.04))
+                    self.music_state = "MENU"
+                except:
+                    print("No se encontro assets/sounds/music_menu.mp3")
+            return
+
+        # ── Música de mundo durante el juego ─────────────────────────────
+        if self.state in ("PLAYING", "PAUSED", "LEVEL_UP", "CUTSCENE", "STORY"):
+            world = getattr(self.game, "world", 1) if self.game else 1
+            desired = f"WORLD_{world}"
+            if self.music_state != desired:
+                track = f"assets/sounds/music_world_{world}.mp3"
+                try:
+                    pygame.mixer.music.load(track)
+                    pygame.mixer.music.play(-1)
+                    pygame.mixer.music.set_volume(self._vol(0.04))
+                    self.music_state = desired
+                except:
+                    print(f"No se encontro {track}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # GUARDADO
@@ -1273,6 +1300,24 @@ class Engine:
                     score_actual)
 
             self.state = "GAME_OVER"
+            # Parar música y reproducir sonido de game over
+            pygame.mixer.music.stop()
+            self.music_state = "GAME_OVER"
+            # Reproducir game over con pygame.mixer.music en canal dedicado
+            import os as _os
+            for _ext in ("ogg", "wav", "mp3"):
+                _go_path = f"assets/sounds/game_over.{_ext}"
+                if _os.path.exists(_go_path):
+                    try:
+                        pygame.mixer.music.load(_go_path)
+                        pygame.mixer.music.play(0)
+                        pygame.mixer.music.set_volume(self._vol(0.6))
+                        print(f"[game_over sfx] Reproduciendo {_go_path}")
+                    except Exception as _e:
+                        print(f"[game_over sfx] Error: {_e}")
+                    break
+            else:
+                print("[game_over sfx] No se encontro game_over.ogg/.wav/.mp3")
             return
         elif estado_juego == "LEVEL_UP":
             self.state = "LEVEL_UP"
@@ -1280,9 +1325,9 @@ class Engine:
             char   = getattr(self, "character_name", "caballero")
 
             owned_names     = {w.name for w in player.weapons}
-            all_unlockable  = WEAPON_UNLOCKS.get(
-                max(WEAPON_UNLOCK_LEVELS), {}).get(char, [])
-            unowned_weapons = [w for w in all_unlockable if w not in owned_names]
+            # Todas las armas del juego menos las que ya tiene el jugador
+            all_unlockable  = [w for w in WEAPONS if w not in owned_names]
+            unowned_weapons = all_unlockable
 
             # 5% de probabilidad de ofrecer un arma nueva si quedan por desbloquear
             if unowned_weapons and random.random() < 0.05:
@@ -1317,14 +1362,13 @@ class Engine:
                 folder = f"mundo_{next_world}"
                 self._start_story(folder, "PLAYING")
             else:
-                # Último boss derrotado → cinemática final, luego sigue jugando en mundo 3
-                player      = self.game.local_player
-                accumulated = self.game.score
-                self.game   = GameSession(character_name=getattr(self, "character_name", "caballero"),
-                                          multiplayer=False, world=3, carry_player=player)
-                self.game.score = accumulated
-                self.apply_volume()
-                self._start_story("final", "PLAYING")
+                # Mundo > 3 no existe; no debería ocurrir
+                pass
+            return
+        elif estado_juego == "ENDGAME_CUTSCENE":
+            # Minotauro derrotado: lanzar cinemática final sin crear nueva GameSession.
+            # El juego sigue en mundo 3 con el mismo spawn_rate y puntuación.
+            self._start_story("final", "PLAYING")
             return
 
         self.game.draw(self.screen)
@@ -1566,6 +1610,7 @@ class Engine:
 
             if hov and clicked:
                 self.game.local_player.apply_upgrade(upgrade)
+                if upgrade.get("type") == "new_weapon": self.apply_volume()
                 self.state = "PLAYING"
                 pygame.display.flip()
                 return
@@ -1663,6 +1708,7 @@ class Engine:
 
         if clicked and btn.collidepoint(mouse_pos) or (clicked and pygame.key.get_pressed()[pygame.K_e]):
             self.game.local_player.apply_upgrade(upgrade)
+            if upgrade.get("type") == "new_weapon": self.apply_volume()
             self.pending_chest_upgrade = None
             self.state = "PLAYING"
 

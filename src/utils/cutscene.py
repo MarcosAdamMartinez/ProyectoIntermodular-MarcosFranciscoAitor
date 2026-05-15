@@ -261,6 +261,8 @@ class StorySequence:
             "Arial", max(16, int(H * 0.028)), bold=False)
         self._font_counter = pygame.font.SysFont(
             "Arial", max(13, int(H * 0.020)), bold=True)
+        self._font_hint = pygame.font.SysFont(
+            "Arial", max(12, int(H * 0.018)), bold=False)
 
     def _build_buttons(self):
         W, H = self.screen.get_size()
@@ -341,6 +343,22 @@ class StorySequence:
         sym  = font.render(label, True, text_color)
         self.screen.blit(sym, sym.get_rect(center=rect.center))
 
+    def _draw_skip_hint(self):
+        """Texto pequeño arriba a la derecha: Presiona ENTER para saltar."""
+        W, H = self.screen.get_size()
+        hint = "Presiona ENTER para saltar la historia"
+        surf = self._font_hint.render(hint, True, (200, 200, 200))
+        pad_x, pad_y = 10, 6
+        margin = max(12, int(W * 0.012))
+        box_w = surf.get_width() + pad_x * 2
+        box_h = surf.get_height() + pad_y * 2
+        box_x = W - box_w - margin
+        box_y = margin
+        bg = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 150))
+        self.screen.blit(bg, (box_x, box_y))
+        self.screen.blit(surf, (box_x + pad_x, box_y + pad_y))
+
     def _draw_next_label(self):
         """Cuando es el último slide el botón ► muestra una etiqueta especial."""
         W, H = self.screen.get_size()
@@ -355,6 +373,7 @@ class StorySequence:
         self._draw_background()
         self._draw_text_box()
         self._draw_counter()
+        self._draw_skip_hint()
 
         has_prev = self.index > 0
         self._draw_nav_button(self._btn_prev, "◄", enabled=has_prev)
@@ -368,6 +387,11 @@ class StorySequence:
         Procesa eventos de navegación.
         Devuelve True si la secuencia debe terminar (y ha llamado a on_done).
         """
+        # ENTER salta toda la cinemática de golpe
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            self.on_done()
+            return True
+
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return False
 

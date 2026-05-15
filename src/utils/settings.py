@@ -31,7 +31,7 @@ PLAYER_SIZE = 100
 # DATOS DE PERSONAJES
 CHARACTERS = {
     "caballero": {
-        "speed": 4,
+        "speed": 10,
         "hp": 240,
         "color": BLUE,
         "sprite": "assets/sprites/players/knight.png",
@@ -65,36 +65,18 @@ WEAPONS = {
                "frags": 1},
 }
 
-# Qué arma desbloquea cada personaje al alcanzar los niveles especiales
-# (las armas de los otros dos héroes)
-WEAPON_UNLOCKS = {
-    # nivel: {personaje_activo: [arma1, arma2]}
-    25:  {
-        "caballero": ["varita", "banana"],
-        "mago":      ["espada", "banana"],
-        "my_uncle":  ["espada", "varita"],
-    },
-    50:  {
-        "caballero": ["varita", "banana"],
-        "mago":      ["espada", "banana"],
-        "my_uncle":  ["espada", "varita"],
-    },
-}
-# Niveles en los que se ofrece el menú de desbloqueo de arma
-WEAPON_UNLOCK_LEVELS = [25, 50]
-
 # Daño por contacto de cada tipo de enemigo (por frame tocando al jugador)
 ENEMY_CONTACT_DAMAGE = {
-    "zombie":      13,
-    "slime":       2,
-    "goblin":      10,
-    "skeleton":    25,
-    "golem":       20,
-    "bat":         30,
+    "zombie":      16,
+    "slime":       4,
+    "goblin":      12,
+    "skeleton":    30,
+    "golem":       25,
+    "bat":         20,
     "demon":       35,
-    "giga_zombie": 15,
-    "yeti":        27,
-    "minotaur":    40,
+    "giga_zombie": 25,
+    "yeti":        40,
+    "minotaur":   60,
     "boss":        30,
 }
 

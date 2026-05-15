@@ -149,15 +149,18 @@ class GameSession:
         self._obs_cell = 256
         self._obs_grid: dict = {}   # (cx,cy) -> [hit_rect, ...]
 
-        try:
-            pygame.mixer.music.load("assets/sounds/music_game.mp3")
-            pygame.mixer.music.play(-1)
-            pygame.mixer.music.set_volume(0.01)
-            self.player_hurt_sound = pygame.mixer.Sound("assets/sounds/player/player_hurt.mp3")
-            self.player_hurt_sound.set_volume(0.05)
-        except:
-            print("Faltan archivos de audio en assets/sounds/")
-            self.player_hurt_sound = None
+        # La música la gestiona el engine por mundo — no cargar aquí
+        self.player_hurt_sound = None
+        import os as _os
+        for _ext in ("ogg", "wav", "mp3"):
+            _hurt_path = f"assets/sounds/player/player_hurt.{_ext}"
+            if _os.path.exists(_hurt_path):
+                try:
+                    self.player_hurt_sound = pygame.mixer.Sound(_hurt_path)
+                    self.player_hurt_sound.set_volume(0.05)
+                except Exception as _e:
+                    print(f"[hurt sfx] Error: {_e}")
+                break
 
         # Pre-generar chunks en radio 3 para que arbustos y rocas ya existan
         # al empezar sin que popeen en pantalla (se hace una sola vez aquí)
@@ -465,17 +468,16 @@ class GameSession:
                     self._spawn_pedestal_guaranteed()
 
             elif self.current_phase == 4:
-                # Fase 4: el spawn baja gradualmente hasta 1,
-                # SALVO que el minotauro ya haya muerto (spawn_rate congelado).
-                if not self._endgame_active:
-                    if self.spawn_rate > 1:
-                        if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
-                            self.spawn_rate -= 0.05
-                        else:
-                            self.spawn_rate = max(1, self.spawn_rate - 0.03)
+                # Fase 4: spawn baja gradualmente hasta 1.
+                if self.spawn_rate > 1:
+                    if self.spawn_rate > {1: 6, 2: 4, 3: 2}.get(self.world, 6):
+                        self.spawn_rate -= 0.05
+                    else:
+                        self.spawn_rate = max(1, self.spawn_rate - 0.03)
 
-                    if not self._pedestal_spawned:
-                        self._spawn_pedestal_guaranteed()
+                # El pedestal NO vuelve a spawnear tras matar al minotauro
+                if not self._pedestal_spawned and not self._endgame_active:
+                    self._spawn_pedestal_guaranteed()
 
         # ── FÍSICAS RÍGIDAS ENTRE ENEMIGOS (spatial hash) ─────────────────────
         # En lugar de O(n²) comparamos solo enemigos en la misma celda/vecinas

@@ -1,4 +1,5 @@
 import pygame
+import math
 import random
 from src.utils.settings import *
 from src.utils.animation import AnimationController
@@ -126,17 +127,27 @@ class Enemy(pygame.sprite.Sprite):
         return self.enemy_type in {"giga_zombie", "yeti", "minotaur", "boss"}
 
     def is_on_screen(self, camera_offset):
-        screen_pos = self.rect.topleft - camera_offset
-        screen_rect = pygame.Rect(screen_pos, self.rect.size)
-        display_rect = pygame.Rect(0, 0, pygame.display.get_surface().get_width(),
-                                   pygame.display.get_surface().get_height())
-        return display_rect.colliderect(screen_rect)
+        # Evitar pygame.display.get_surface() cada frame — usar coordenadas de rect directamente
+        sx = self.rect.centerx - camera_offset.x
+        sy = self.rect.centery - camera_offset.y
+        hw = self.rect.width  // 2 + 16
+        hh = self.rect.height // 2 + 16
+        surf = pygame.display.get_surface()
+        W, H = surf.get_width(), surf.get_height()
+        return -hw < sx < W + hw and -hh < sy < H + hh
 
     def draw_boss_ui(self, screen, camera_offset):
         W = screen.get_width()
         H = screen.get_height()
 
-        if not self.is_on_screen(camera_offset):
+        # is_on_screen ya está optimizado; reutilizar W/H sin llamar get_surface()
+        sx = self.rect.centerx - camera_offset.x
+        sy = self.rect.centery - camera_offset.y
+        hw = self.rect.width  // 2 + 16
+        hh = self.rect.height // 2 + 16
+        _on_screen = -hw < sx < W + hw and -hh < sy < H + hh
+
+        if not _on_screen:
             screen_cx = W // 2
             screen_cy = H // 2
 
@@ -156,7 +167,6 @@ class Enemy(pygame.sprite.Sprite):
             ax = int(screen_cx + nx * scale)
             ay = int(screen_cy + ny * scale)
 
-            import math
             angle = math.atan2(ny, nx)
             arrow_len = 22
             arrow_w = 11
@@ -174,7 +184,7 @@ class Enemy(pygame.sprite.Sprite):
             hp_txt = font_small.render(f"{self.hp}/{self.max_hp}", True, (255, 200, 200))
             screen.blit(hp_txt, (ax - hp_txt.get_width() // 2, ay - hp_txt.get_height() // 2 - 18))
 
-        else:
+        elif _on_screen:
             screen_pos = pygame.math.Vector2(self.rect.centerx - camera_offset.x,
                                              self.rect.top      - camera_offset.y - 14)
             bar_w = self.rect.width

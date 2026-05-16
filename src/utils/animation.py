@@ -1,76 +1,55 @@
+# Importamos pygame y os para leer las carpetas de frames del disco
 import pygame
 import os
 
 
+# Controlador de animaciones basado en carpetas de imágenes numeradas (1.png, 2.png, ...)
 class AnimationController:
-    """
-    Controlador de animaciones basado en carpetas de frames.
-
-    Estructura de carpetas esperada:
-        assets/sprites/players/<nombre>/<estado>/0.png, 1.png, ...
-        assets/sprites/enemies/<tipo>/<estado>/0.png, 1.png, ...
-
-    Estados soportados:
-        - idle        → en reposo
-        - walk_right  → moviéndose a la derecha (o cualquier dirección)
-        - walk_left   → moviéndose a la izquierda (espejo de walk_right)
-        - hurt        → recibiendo daño (se reproduce una vez)
-
-    Si una carpeta de estado no existe, usa el frame estático de fallback.
-    Si walk_left no existe pero walk_right sí, se voltea horizontalmente.
-    """
-
     def __init__(self, base_path: str, size: tuple, fallback_image: pygame.Surface,
                  fps: int = 8):
-        """
-        base_path   : carpeta raíz del personaje/enemigo
-                      ej. "assets/sprites/players/knight"
-        size        : tamaño al que escalar cada frame
-        fallback_image : Surface estática que se usa si no hay animación
-        fps         : velocidad de la animación en frames de animación por segundo
-                      (independiente del FPS del juego)
-        """
         self.size = size
+        # Si no hay animación usamos esta imagen estática como fallback
         self.fallback = fallback_image
         self.anim_fps = fps
-        self.frame_duration = max(1, 60 // fps)   # en ticks de juego (asume 60 FPS)
+        # Convertimos FPS de animación a duración en ticks de juego (asumimos 60 FPS)
+        self.frame_duration = max(1, 60 // fps)
 
+        # Diccionario que mapea nombre de estado a lista de frames (Surfaces)
         self.animations: dict[str, list[pygame.Surface]] = {}
-        self._load_animations(base_path)
+        self.load_animations(base_path)
 
+        # Estado inicial y contadores de frame
         self.state = "idle"
         self.frame_index = 0
         self.tick = 0
 
-        # Para el estado hurt (se reproduce una sola vez)
+        # Variables para la animación de hurt (solo se reproduce una vez)
         self.hurt_timer = 0
         self.prev_state = "idle"
 
-    # ------------------------------------------------------------------ #
-    #  Carga                                                               #
-    # ------------------------------------------------------------------ #
-    def _load_animations(self, base_path: str):
-        """Carga todos los estados que encuentre en base_path."""
+    def load_animations(self, base_path: str):
+        # Si no existe la carpeta base no cargamos nada y usamos el fallback
         if not os.path.isdir(base_path):
-            return  # sin carpeta → solo fallback
+            return
 
+        # Recorremos cada subcarpeta (cada estado de animación)
         for state_dir in os.listdir(base_path):
             full_dir = os.path.join(base_path, state_dir)
             if not os.path.isdir(full_dir):
                 continue
 
-            frames = self._load_frames(full_dir)
+            frames = self.load_frames(full_dir)
             if frames:
                 self.animations[state_dir] = frames
 
-        # Si tenemos walk_right pero no walk_left, generamos walk_left volteando
+        # Si existe walk_right pero no walk_left, lo generamos volteando horizontalmente
         if "walk_right" in self.animations and "walk_left" not in self.animations:
             self.animations["walk_left"] = [
                 pygame.transform.flip(f, True, False)
                 for f in self.animations["walk_right"]
             ]
 
-        # Si tenemos walk pero no walk_right/walk_left, los alias ambos
+        # Si el artista usó "walk" en vez de "walk_right/walk_left" lo mapeamos a ambos
         if "walk" in self.animations:
             if "walk_right" not in self.animations:
                 self.animations["walk_right"] = self.animations["walk"]
@@ -80,7 +59,8 @@ class AnimationController:
                     for f in self.animations["walk"]
                 ]
 
-    def _load_frames(self, folder: str) -> list[pygame.Surface]:
+    def load_frames(self, folder: str) -> list[pygame.Surface]:
+        # Cargamos los frames numerados desde 1.png en adelante hasta que no exista el siguiente
         frames = []
         i = 1
         while True:
@@ -91,14 +71,17 @@ class AnimationController:
             try:
                 img = pygame.image.load(path).convert_alpha()
 
+                # Escalamos manteniendo la proporción original dentro del tamaño objetivo
                 orig_w, orig_h = img.get_size()
                 target_w, target_h = self.size
                 ratio = min(target_w / orig_w, target_h / orig_h)
                 new_w = int(orig_w * ratio)
                 new_h = int(orig_h * ratio)
 
-                img = pygame.transform.scale(img, (new_w, new_h))
+                # Forzamos a que el escalado final se ajuste estrictamente al tamaño de la caja objetivo
+                img = pygame.transform.smoothscale(img, (new_w, new_h))
 
+                # Centramos el frame escalado en un surface del tamaño objetivo
                 final = pygame.Surface(self.size, pygame.SRCALPHA)
                 offset_x = (target_w - new_w) // 2
                 offset_y = (target_h - new_h) // 2
@@ -111,17 +94,14 @@ class AnimationController:
             i += 1
         return frames
 
-    # ------------------------------------------------------------------ #
-    #  Control de estado                                                   #
-    # ------------------------------------------------------------------ #
     def has_animation(self, state: str) -> bool:
+        # Comprobamos si existe al menos un frame para el estado pedido
         return state in self.animations and len(self.animations[state]) > 0
 
     def set_state(self, state: str):
-        """Cambia de estado; reinicia el frame si el estado cambia."""
+        # Cambiamos de estado y reiniciamos los contadores; hurt tiene prioridad y no se interrumpe
         if state == self.state:
             return
-        # hurt tiene prioridad y se gestiona externamente con trigger_hurt()
         if self.state == "hurt" and self.hurt_timer > 0:
             return
         if self.has_animation(state):
@@ -130,24 +110,22 @@ class AnimationController:
             self.tick = 0
 
     def trigger_hurt(self):
-        """Activa la animación de daño; se reproduce una vez."""
+        # Activamos la animación de daño; guarda el estado actual para restaurarlo después
         if not self.has_animation("hurt"):
             return
         self.prev_state = self.state
         self.state = "hurt"
         self.frame_index = 0
         self.tick = 0
+        # El timer dura exactamente los frames de hurt multiplicados por su duración
         self.hurt_timer = len(self.animations["hurt"]) * self.frame_duration
 
-    # ------------------------------------------------------------------ #
-    #  Actualización y obtención del frame actual                          #
-    # ------------------------------------------------------------------ #
     def update(self) -> pygame.Surface:
-        """
-        Debe llamarse una vez por tick de juego.
-        Devuelve el Surface que se debe mostrar.
-        """
+        # Llamamos esto una vez por tick; devuelve el frame que hay que dibujar ahora
         if not self.has_animation(self.state):
+            # Si el fallback también es gigante, lo escalamos al tamaño correcto antes de devolverlo
+            if self.fallback.get_size() != self.size:
+                self.fallback = pygame.transform.smoothscale(self.fallback, self.size)
             return self.fallback
 
         frames = self.animations[self.state]
@@ -157,16 +135,16 @@ class AnimationController:
             self.tick = 0
             self.frame_index += 1
 
-            # ── Hurt: solo una pasada ──────────────────────────────────
             if self.state == "hurt":
+                # La animación de hurt solo se reproduce una vez y luego vuelve al estado anterior
                 self.hurt_timer -= self.frame_duration
                 if self.frame_index >= len(frames):
                     self.frame_index = 0
                     self.hurt_timer = 0
-                    # Volver al estado anterior
                     restore = self.prev_state if self.has_animation(self.prev_state) else "idle"
                     self.state = restore
             else:
+                # El resto de animaciones hacen loop automáticamente
                 self.frame_index %= len(frames)
 
         return frames[self.frame_index]

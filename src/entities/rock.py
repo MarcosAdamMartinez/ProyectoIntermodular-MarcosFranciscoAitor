@@ -21,17 +21,20 @@ ROCK_SPRITES = {
     }
 }
 
-
+# clase que representa una roca decorativo con colisión
 class Rock(pygame.sprite.Sprite):
+    # inicializamos la roca: cargamos sprite, calculamos rectángulo de colisión
     def __init__(self, pos, world=1):
         super().__init__()
 
         rock_variant = random.randint(1, 3)
 
+        # tamaño aleatorio para que no todas las rocas sean iguales
         size = random.randint(65, 115)
         w = size
         h = int(size * 0.75)
 
+        # elegimos sprite según el mundo actual, con fallback al mundo 1
         world_rocks = ROCK_SPRITES.get(world, ROCK_SPRITES[1])
         sprite_path, fallback_color = world_rocks[rock_variant]
 
